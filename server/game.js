@@ -1,4 +1,16 @@
 import crypto from 'node:crypto';
+import {
+  MISSION_MODES,
+  MISSION,
+  sanitizeCheckpoints,
+  checkpointsInZone,
+  resetMissions,
+  clearMissions,
+  missionsTick,
+  missionsZoneChange,
+  missionsDropPlayer,
+  missionsView,
+} from './missions.js';
 
 const MIN = 60_000;
 const STALE_MS = 2 * MIN;      // ohne GPS-Update so lange -> "Signal verloren"
@@ -61,6 +73,8 @@ export const DEFAULT_SETTINGS = {
   infection: false,       // Gefangene werden zu Jägern
   catchRule: 'touch',     // wann jemand als gefangen gilt (siehe CATCH_RULES)
   eventsMode: 'off',      // Special Events: off | rare | often
+  missionsMode: 'off',    // Missionen (Checkpoints): off | rare | often
+  checkpoints: [],        // Ziele für Missionen, vom Spielleiter ausgewählt (geheim)
   hiderJokers: 2,
   hunterExtraPings: 2,
   hunterDrones: 1,
@@ -165,6 +179,7 @@ export function sanitizeSettings(input = {}, current = DEFAULT_SETTINGS) {
   int('comebackAt', 0, 5);
   if (CATCH_RULES.includes(input.catchRule)) s.catchRule = input.catchRule;
   if (EVENT_MODES.includes(input.eventsMode)) s.eventsMode = input.eventsMode;
+  if (MISSION_MODES.includes(input.missionsMode)) s.missionsMode = input.missionsMode;
   bool('shrink');
   bool('hidersSeeEachOther');
   bool('infection');
@@ -197,6 +212,10 @@ export function sanitizeSettings(input = {}, current = DEFAULT_SETTINGS) {
     };
   }
   if (s.finalMode === 'custom' && !s.finalCenter) s.finalCenter = { lat: s.zone.lat, lng: s.zone.lng };
+  // Checkpoints werden gegen die Zone geprüft; verschiebt sich die Zone später, zählen nur die, die noch drin liegen.
+  if (input.checkpoints !== undefined) s.checkpoints = sanitizeCheckpoints(input.checkpoints, s.zone);
+  if (!Array.isArray(s.checkpoints)) s.checkpoints = [];
+  if (!MISSION_MODES.includes(s.missionsMode)) s.missionsMode = 'off';
   return s;
 }
 
@@ -308,6 +327,7 @@ export class Game {
     this.lastHunters = []; // Jäger der zuletzt gestarteten Runde (für "Andere Jäger als letzte Runde")
     this.roundLog = []; // Joker und Events der laufenden Runde, fürs Archiv
     this.pendingArchive = null; // Datensatz der beendeten Runde, wartet aufs Speichern
+    this.missions = null; // Missionen der laufenden Runde (siehe server/missions.js)
     this.dirty = true;
   }
 
@@ -398,6 +418,7 @@ export class Game {
     const p = this.players.get(id);
     if (!p) return;
     this.players.delete(id);
+    if (this.running) missionsDropPlayer(this, id, 'left', Date.now());
     if (this.crush?.includes(id)) this.crush = null;
     this.disputes = (this.disputes ?? []).filter((d) => d.hunterId !== id && d.hiderId !== id);
     if (this.hostId === id) {
@@ -491,9 +512,12 @@ export class Game {
     const hiders = all.filter((p) => p.role === 'hider');
     if (!all.some((p) => p.role === 'hunter')) throw new GameError('Es braucht mindestens einen Jäger.');
     if (!hiders.length) throw new GameError('Es braucht mindestens einen Hider.');
+    const s = this.settings;
+    if (s.missionsMode !== 'off' && checkpointsInZone(s).length < MISSION.minCheckpoints) {
+      throw new GameError('Für Missionen braucht es mindestens 3 Checkpoints im Spielfeld. Wähle sie in Schritt 3 aus oder stell Missionen aus.');
+    }
 
     const now = Date.now();
-    const s = this.settings;
     this.round += 1;
     this.timers = {
       startedAt: now,
@@ -545,6 +569,7 @@ export class Game {
     this.pings = [];
     this.result = null;
     this.roundLog = [];
+    resetMissions(this, now);
     this.pendingArchive = null;
     this.catchFails.clear();
     this.disputes = [];
@@ -583,6 +608,7 @@ export class Game {
     const now = Date.now();
     this.phase = 'ended';
     this.disputes = [];
+    clearMissions(this);
     for (const p of this.players.values()) {
       if (p.pos) p.trail.push([p.pos.lat, p.pos.lng, now]);
     }
@@ -644,6 +670,7 @@ export class Game {
           finalCenter: s.finalCenter,
           catchRule: s.catchRule,
           eventsMode: s.eventsMode,
+          missionsMode: s.missionsMode,
           infection: s.infection,
           hiderJokers: s.hiderJokers,
           hunterExtraPings: s.hunterExtraPings,
@@ -662,6 +689,7 @@ export class Game {
         })),
         jokersUsed: log.filter((e) => e.kind === 'joker').map((e) => ({ name: e.name, type: e.type, atMin: atMin(e.at) })),
         events: log.filter((e) => e.kind === 'event').map((e) => ({ type: e.type, atMin: atMin(e.at) })),
+        missions: log.filter((e) => e.kind === 'mission').map((e) => ({ name: e.name, checkpoint: e.checkpoint, result: e.result, atMin: atMin(e.at) })),
         trophies: this.result.trophies.map((t) => ({ name: t.name, why: t.why })),
         trails: Object.fromEntries(all.map((p) => [p.name, simplifyTrail(p.trail ?? [], startedAt)])),
       },
@@ -708,6 +736,7 @@ export class Game {
     this.lastPing = null;
     this.drone = null;
     this.zoneStages = [];
+    this.missions = null;
     for (const p of this.players.values()) {
       p.role = p.startRole ?? p.role;
       p.status = 'alive';
@@ -773,6 +802,7 @@ export class Game {
           st.warned = true;
           const mins = Math.max(1, Math.round((st.at - now) / MIN));
           this.emit('all', `🟡 Die Zone wird in ${minutes(mins)} kleiner! Die neue Zone ist gelb markiert.`, { sound: 'warn' });
+          missionsZoneChange(this, st, now);
           this.touch();
         }
         if (!st.applied && now >= st.at) {
@@ -781,6 +811,7 @@ export class Game {
           const iv = pingIntervalMs(s, st.k, total);
           const faster = s.pingSpeedup && iv < s.pingIntervalMin * MIN ? ` Pings jetzt alle ${fmtMinutes(iv)}.` : '';
           this.emit('all', `🔴 Die Zone ist jetzt kleiner: ${st.radius} m Radius.${tail}${faster}`, { sound: 'warn' });
+          missionsZoneChange(this, st, now);
           this.touch();
         }
       }
@@ -898,6 +929,8 @@ export class Game {
       while (this.timers.nextPingAt <= now) this.timers.nextPingAt += iv;
     }
 
+    if (hunt) missionsTick(this, now);
+
     // Ausgleich: sind nur noch wenige Hider frei, bekommt jeder einmal Tarnkappe oder Doppelgänger
     if (hunt && s.comebackAt > 0 && !this.comebackGiven && (this.startHiderCount ?? 0) > s.comebackAt) {
       const alive = this.aliveHiders();
@@ -1005,6 +1038,7 @@ export class Game {
       this.emit('hunter', `💰 Kopfgeld kassiert! Ihr bekommt einen ${JOKERS[j].icon} ${JOKERS[j].name}.`);
     }
     this.disputes = (this.disputes ?? []).filter((d) => d.hiderId !== target.id);
+    missionsDropPlayer(this, target.id, 'caught', now);
     this.emit('all', `🎯 ${me.name} hat ${target.name} gefangen!${viaReferee ? ' (Entscheidung des Spielleiters)' : ''}`, { sound: 'catch' });
     if (this.settings.infection) {
       target.role = 'hunter';
@@ -1276,6 +1310,7 @@ export class Game {
     const radarOn = me.role === 'hider' && me.status === 'alive' && me.radarUntil > now;
     const pingById = new Map((this.lastPing?.entries ?? []).map((e) => [e.id, e]));
     const crush = this.crushPartner(me.id);
+    const missions = missionsView(this, me, now);
 
     const players = [...this.players.values()].map((p) => {
       const o = {
@@ -1370,8 +1405,8 @@ export class Game {
       phase: this.phase,
       round: this.round,
       hostId: this.hostId,
-      // Die Mitte einer selbst gesetzten Endzone kennt nur der Spielleiter.
-      settings: me.id === this.hostId ? this.settings : { ...this.settings, finalCenter: null },
+      // Die Mitte einer selbst gesetzten Endzone und die Checkpoints kennt nur der Spielleiter.
+      settings: me.id === this.hostId ? this.settings : { ...this.settings, finalCenter: null, checkpoints: [] },
       timers: this.timers,
       lastPingAt: this.lastPing?.at ?? null,
       zone: this.currentZone(now),
@@ -1399,7 +1434,11 @@ export class Game {
         bgAt: me.bgAt ?? 0,
         protectedUntil: me.protectedUntil > now ? me.protectedUntil : 0,
         spectator: me.role === 'hider' && me.status === 'caught',
+        missionOffer: missions.offer,
+        mission: missions.mission,
       },
+      // Missionen: Kreise am Ziel, nur für Jäger und Zuschauer
+      missions: missions.targets,
       hunterPool: asHunter ? this.hunterPool : null,
       // Geheim: das Paar kennt nur sich selbst, der Spielleiter sieht die Einstellung
       crush: crush ? { partnerId: crush.id, partnerName: crush.name } : null,

@@ -9,6 +9,7 @@ import { io } from 'socket.io-client';
 import { Game, distanceM, planZoneStages, DEFAULT_SETTINGS, eventCount, planEvents, pingIntervalMs } from '../server/game.js';
 import { parseGuestPasswords, createAccess } from '../server/access.js';
 import { FIRST_TIME_SETTINGS, firstTimeUpdate, isFirstTime } from '../public/first-time.js';
+import { missionTimeMs, missionReward, sanitizeCheckpoints, checkpointsInZone, MISSION, respondMission } from '../server/missions.js';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const VS = { lat: 48.0603, lng: 8.4586 };
@@ -783,6 +784,405 @@ function eventTests() {
   console.log('✓ Special Events');
 }
 
+// Missionen: Rechenregeln, Einstellungen, Start-Prüfung
+function missionRuleTests() {
+  const MIN = 60_000;
+  assert.equal(missionTimeMs(650), 8 * MIN);
+  assert.equal(missionTimeMs(300), 5 * MIN);
+  assert.equal(missionTimeMs(900), 9 * MIN);
+  assert.equal(missionReward(499, () => 0), 'decoy');
+  assert.ok(['cloak', 'radar'].includes(missionReward(500, () => 0)));
+  assert.ok(['cloak', 'radar'].includes(missionReward(800, () => 0.99)));
+  const zone = { lat: VS.lat, lng: VS.lng, radius: 1000 };
+  const far = { lat: VS.lat + 0.05, lng: VS.lng, name: 'weit weg' };
+  const cps = sanitizeCheckpoints([{ id: 'a', name: '  Marktplatz ', lat: VS.lat, lng: VS.lng }, far, { lat: 'x' }, { id: 'a', lat: VS.lat, lng: VS.lng }], zone);
+  assert.deepEqual(cps.map((c) => [c.id, c.name]), [['a', 'Marktplatz']]);
+  assert.equal(sanitizeCheckpoints(Array.from({ length: 30 }, (_, i) => ({ lat: VS.lat, lng: VS.lng, name: `P${i}` })), zone).length, MISSION.maxCheckpoints);
+  assert.equal(sanitizeCheckpoints([{ lat: VS.lat, lng: VS.lng, name: '   ' }], zone)[0].name, 'Checkpoint');
+  assert.equal(sanitizeCheckpoints([{ lat: VS.lat, lng: VS.lng, name: 'x'.repeat(60) }], zone)[0].name.length, 40);
+  assert.deepEqual(sanitizeCheckpoints('quatsch', zone), []);
+  // Settings
+  const g = new Game('MISS');
+  const host = g.addPlayer('Leiter');
+  const lea = g.addPlayer('Lea');
+  assert.equal(g.settings.missionsMode, 'off', 'Standard: aus');
+  g.updateSettings(host.id, { missionsMode: 'often', checkpoints: cps });
+  assert.equal(g.settings.missionsMode, 'often');
+  g.updateSettings(host.id, { missionsMode: 'quatsch' });
+  assert.equal(g.settings.missionsMode, 'often');
+  assert.equal(g.settings.checkpoints.length, 1, 'andere Einstellungen lassen die Checkpoints stehen');
+  assert.deepEqual(g.view(lea.id).settings.checkpoints, [], 'Mitspieler sehen die Checkpoints nicht');
+  assert.equal(g.view(host.id).settings.checkpoints.length, 1);
+  // Zone verschoben: Checkpoints außerhalb zählen nicht
+  const three = [0, 1, 2].map((i) => ({ id: `c${i}`, name: `C${i}`, lat: VS.lat + i * 0.001, lng: VS.lng }));
+  g.updateSettings(host.id, { checkpoints: three });
+  assert.equal(checkpointsInZone(g.settings).length, 3);
+  g.updateSettings(host.id, { zone: { lat: VS.lat + 0.05, lng: VS.lng, radius: 1000 } });
+  assert.equal(checkpointsInZone(g.settings).length, 0, 'Zone verschoben: keiner mehr drin');
+  // Start braucht 3 Checkpoints in der Zone
+  g.setRole(host.id, host.id, 'hunter');
+  assert.throws(() => g.start(host.id), /mindestens 3 Checkpoints/);
+  g.updateSettings(host.id, { missionsMode: 'off' });
+  g.start(host.id); // ohne Missionen egal
+  console.log('✓ Missionen: Regeln');
+}
+
+// Missionen: Ablauf im Spiel (Zeit wird über tick(t) gesteuert)
+function missionFlowTests() {
+  const MIN = 60_000;
+  const north = (m) => ({ lat: VS.lat + m / 111320, lng: VS.lng });
+  const setup = ({ cps = [400, 500, 600, 700], infection = false } = {}) => {
+    const g = new Game('MISN');
+    const ps = ['Leiter', 'J2', 'Lea', 'Tom', 'Mia'].map((n) => g.addPlayer(n));
+    const host = ps[0];
+    g.setRole(host.id, ps[0].id, 'hunter');
+    g.setRole(host.id, ps[1].id, 'hunter');
+    const checkpoints = cps.map((m, i) => ({ id: `cp${i}`, name: `CP${i}`, ...north(m) }));
+    g.updateSettings(host.id, { headStartMin: 0, missionsMode: 'often', checkpoints, pingTrail: 3, shrink: false, hiderJokers: 0, infection });
+    g.start(host.id);
+    g.eventPlan = [];
+    g.timers.nextPingAt = g.timers.endAt + 1; // keine normalen Pings, die stören
+    const T0 = g.timers.huntStartAt;
+    const hiders = ps.filter((p) => p.role === 'hider').map((p) => g.players.get(p.id));
+    const put = (p, pos, t) => (g.players.get(p.id).pos = { ...pos, acc: 5, t });
+    const fresh = (t, pos = VS) => hiders.forEach((h) => h.pos?.moved || put(h, pos, t));
+    const tick = (t, pos) => {
+      fresh(t, pos);
+      g.tick(t);
+    };
+    const offerOf = () => g.missions.offers[0];
+    return { g, ps, host, hunter: ps[1], hiders, put, tick, T0, offerOf, checkpoints };
+  };
+  const textsTo = (g, id) => g.events.filter((e) => e.to === id).map((e) => e.text);
+
+  // 1. Vor 5 min kein Angebot, bei 5 min genau eins (60 s Bedenkzeit), Jäger sehen nichts
+  {
+    const { g, T0, tick, hiders, hunter } = setup();
+    tick(T0 + 4 * MIN);
+    assert.equal(g.missions.offers.length, 0, 'vor 5 min kein Angebot');
+    const t = T0 + 5 * MIN;
+    tick(t);
+    const withOffer = hiders.filter((h) => g.view(h.id, t).me.missionOffer);
+    assert.equal(withOffer.length, 1, 'genau ein Hider hat ein Angebot');
+    const o = g.view(withOffer[0].id, t).me.missionOffer;
+    assert.equal(o.until, t + 60_000);
+    assert.ok(o.name && o.distanceM >= 300 && o.distanceM <= 900 && o.timeMs > 0 && o.reward);
+    assert.deepEqual(g.view(hunter.id, t).missions, [], 'Jäger sehen Angebote nicht');
+  }
+  // 2. Annehmen: eigene Mission, Jäger sehen Kreis ohne Namen, andere Hider nichts, Zuschauer mit Namen
+  {
+    const { g, T0, tick, hiders, hunter, host } = setup();
+    const t = T0 + 5 * MIN;
+    tick(t);
+    const raw = g.missions.offers[0];
+    const me = g.players.get(raw.hiderId);
+    respondMission(g, me.id, raw.id, true, t + 1000);
+    const v = g.view(me.id, t + 1000).me;
+    assert.equal(v.missionOffer, null);
+    assert.equal(v.mission.until, t + 1000 + missionTimeMs(raw.distanceM));
+    assert.equal(v.mission.radius, 35);
+    const hv = g.view(hunter.id, t + 1000).missions;
+    assert.equal(hv.length, 1);
+    assert.equal(hv[0].hider, undefined, 'Jäger sehen nicht, wer kommt');
+    const other = hiders.find((h) => h.id !== me.id);
+    assert.deepEqual(g.view(other.id, t + 1000).missions, [], 'andere Hider sehen die Mission nicht');
+    assert.ok(textsTo(g, 'hunter').some((x) => /Mission zum Checkpoint/.test(x)));
+    // Zuschauer (gefangen, ohne Infektion) sieht den Namen
+    g.markCaught(host, g.players.get(other.id), t + 2000);
+    assert.equal(g.view(other.id, t + 2000).missions[0].hider, me.name);
+  }
+  // 3. 30 s im Kreis ohne neue Position (Hintergrund-Ortung) → geschafft, Joker
+  {
+    const { g, T0, tick, put, checkpoints } = setup();
+    const t = T0 + 5 * MIN;
+    tick(t);
+    const raw = g.missions.offers[0];
+    const me = g.players.get(raw.hiderId);
+    respondMission(g, me.id, raw.id, true, t);
+    const cp = checkpoints.find((c) => c.id === raw.checkpointId);
+    const t1 = t + MIN;
+    put(me, cp, t1);
+    me.pos.moved = true;
+    tick(t1);
+    put(me, cp, t1 + 20_000); // Hintergrund-Ortung: nächste Position nach 20 s, danach Stille
+    me.pos.moved = true;
+    tick(t1 + 29_000);
+    assert.equal(g.missions.active.length, 1, 'nach 29 s läuft sie noch');
+    assert.equal(g.view(me.id, t1 + 29_000).me.mission.inMs, 29_000);
+    assert.equal(g.view(me.id, t1 + 29_000).me.mission.inSince, t1, 'Startzeit im Kreis, damit das Handy weiterzählen kann');
+    tick(t1 + 30_000);
+    assert.equal(g.missions.active.length, 0, 'nach 30 s geschafft');
+    assert.ok(me.jokers.includes(raw.reward), 'Belohnungs-Joker');
+    assert.ok(g.roundLog.some((e) => e.kind === 'mission' && e.result === 'done' && e.name === me.name && e.checkpoint === cp.name));
+    assert.ok(g.events.some((e) => e.to === 'hunter' && /Mission geschafft/.test(e.text)), 'Jäger erfahren es');
+    assert.ok(!g.events.some((e) => e.to === 'all' && /Mission geschafft/.test(e.text)), 'andere Hider erfahren nichts');
+  }
+  // 4. Rein, raus, rein → Zählung beginnt neu
+  {
+    const { g, T0, tick, put, checkpoints } = setup();
+    const t = T0 + 5 * MIN;
+    tick(t);
+    const raw = g.missions.offers[0];
+    const me = g.players.get(raw.hiderId);
+    respondMission(g, me.id, raw.id, true, t);
+    const cp = checkpoints.find((c) => c.id === raw.checkpointId);
+    const t1 = t + MIN;
+    put(me, cp, t1);
+    me.pos.moved = true;
+    tick(t1);
+    put(me, VS, t1 + 10_000);
+    me.pos.moved = true;
+    tick(t1 + 10_000);
+    put(me, cp, t1 + 20_000);
+    me.pos.moved = true;
+    tick(t1 + 20_000);
+    put(me, cp, t1 + 40_000);
+    me.pos.moved = true;
+    tick(t1 + 45_000);
+    assert.equal(g.missions.active.length, 1, 'erst 25 s am Stück');
+    tick(t1 + 50_000);
+    assert.equal(g.missions.active.length, 0, 'jetzt 30 s am Stück');
+  }
+  // 4b. Veraltete Position (älter als 45 s) zählt nicht
+  {
+    const { g, T0, tick, put, checkpoints } = setup();
+    const t = T0 + 5 * MIN;
+    tick(t);
+    const raw = g.missions.offers[0];
+    const me = g.players.get(raw.hiderId);
+    respondMission(g, me.id, raw.id, true, t);
+    const cp = checkpoints.find((c) => c.id === raw.checkpointId);
+    put(me, cp, t);
+    me.pos.moved = true;
+    tick(t + 46_000);
+    tick(t + 80_000);
+    assert.equal(g.missions.active.length, 1, 'ohne frische Position kein Erfolg');
+  }
+  // 4c. Eine einzige Position im Kreis reicht nicht (reinlaufen, Handy sperren, weggehen)
+  {
+    const { g, T0, tick, put, checkpoints } = setup();
+    const t = T0 + 5 * MIN;
+    tick(t);
+    const raw = g.missions.offers[0];
+    const me = g.players.get(raw.hiderId);
+    respondMission(g, me.id, raw.id, true, t);
+    const cp = checkpoints.find((c) => c.id === raw.checkpointId);
+    const t1 = t + MIN;
+    put(me, cp, t1);
+    me.pos.moved = true;
+    for (let s = 0; s <= 44; s++) tick(t1 + s * 1000);
+    assert.equal(g.missions.active.length, 1, 'ohne zweite Position im Kreis kein Erfolg');
+  }
+  // 5. Zeit um → Strafe-Ping mit echtem Standort, Tarnkappe wirkt nicht; mit Schutzschild keine Strafe
+  {
+    const { g, T0, tick, hunter } = setup();
+    const t = T0 + 5 * MIN;
+    tick(t);
+    const raw = g.missions.offers[0];
+    const me = g.players.get(raw.hiderId);
+    respondMission(g, me.id, raw.id, true, t);
+    me.cloakNext = true;
+    const until = g.missions.active[0].until;
+    const pings = g.pings.length;
+    tick(until + 1000);
+    assert.equal(g.missions.active.length, 0);
+    assert.equal(g.pings.length, pings + 1, 'Strafe-Ping');
+    const last = g.pings.at(-1);
+    assert.equal(last.penalty, true);
+    assert.equal(last.entries[0].lat, me.pos.lat);
+    const pv = g.view(hunter.id, until + 1000).players.find((p) => p.id === me.id);
+    assert.equal(pv.kind, 'ping');
+    assert.equal(pv.pos.lat, me.pos.lat);
+    assert.equal(me.cloakNext, true, 'Tarnkappe bleibt für den nächsten Ping');
+    assert.ok(g.roundLog.some((e) => e.kind === 'mission' && e.result === 'failed'));
+    assert.ok(textsTo(g, me.id).some((x) => /Zeit um/.test(x)));
+  }
+  {
+    const { g, T0, tick } = setup();
+    const t = T0 + 5 * MIN;
+    tick(t);
+    const raw = g.missions.offers[0];
+    const me = g.players.get(raw.hiderId);
+    respondMission(g, me.id, raw.id, true, t);
+    const until = g.missions.active[0].until;
+    me.shieldUntil = until + 60_000;
+    const pings = g.pings.length;
+    tick(until + 1000);
+    assert.equal(g.missions.active.length, 0);
+    assert.equal(g.pings.length, pings, 'Schutzschild: keine Strafe');
+  }
+  // 6. Ablehnen → neues Angebot an anderen Hider (Platz 2, 3), dann verfällt der Platz; 5 min Pause für Ablehner
+  {
+    const { g, T0, tick, offerOf } = setup();
+    const t = T0 + 5 * MIN;
+    tick(t);
+    const asked = [];
+    for (let slot = 1; slot <= 3; slot++) {
+      const o = offerOf();
+      assert.ok(o, `Angebot ${slot}`);
+      assert.equal(o.slot, slot);
+      assert.ok(!asked.includes(o.hiderId), 'immer ein anderer Hider');
+      asked.push(o.hiderId);
+      respondMission(g, o.hiderId, o.id, false, t + slot * 1000);
+    }
+    assert.equal(g.missions.offers.length, 0, 'nach 3 Angeboten verfällt der Platz');
+    g.missions.nextAt = t + 2 * MIN;
+    tick(t + 2 * MIN);
+    assert.equal(g.missions.offers.length, 0, 'alle haben abgelehnt: 5 min Pause');
+    g.missions.nextAt = t + 5 * MIN + 5000;
+    tick(t + 5 * MIN + 5000);
+    assert.equal(g.missions.offers.length, 1, 'nach 5 min wieder');
+  }
+  // 6b. Keine Antwort in 60 s → weiter an anderen Hider
+  {
+    const { g, T0, tick, offerOf } = setup();
+    const t = T0 + 5 * MIN;
+    tick(t);
+    const first = offerOf();
+    tick(t + 61_000);
+    assert.equal(g.missions.offers.length, 1);
+    assert.notEqual(offerOf().hiderId, first.hiderId);
+    assert.equal(offerOf().slot, 2);
+  }
+  // 7. Höchstens 2 gleichzeitig, nie zwei am selben Checkpoint
+  {
+    const { g, T0, tick, offerOf } = setup();
+    let t = T0 + 5 * MIN;
+    tick(t);
+    respondMission(g, offerOf().hiderId, offerOf().id, true, t);
+    g.missions.nextAt = t + MIN; // nächster Termin, solange die erste Mission noch läuft
+    t = g.missions.nextAt;
+    tick(t);
+    assert.equal(g.missions.offers.length + g.missions.active.length, 2);
+    g.missions.nextAt = t + MIN;
+    t = g.missions.nextAt;
+    tick(t);
+    assert.equal(g.missions.offers.length + g.missions.active.length, 2, 'kein drittes Angebot');
+  }
+  for (let i = 0; i < 50; i++) {
+    const { g, T0, tick, offerOf } = setup({ cps: [100, 400, 500, 1000] });
+    let t = T0 + 5 * MIN;
+    tick(t);
+    respondMission(g, offerOf().hiderId, offerOf().id, true, t);
+    g.missions.nextAt = t + MIN; // nächster Termin, solange die erste Mission noch läuft
+    t = g.missions.nextAt;
+    tick(t);
+    const ids = [...g.missions.offers, ...g.missions.active].map((m) => m.checkpointId);
+    assert.equal(ids.length, 2);
+    assert.notEqual(ids[0], ids[1], 'nie zwei am selben Checkpoint');
+    assert.ok(ids.every((id) => id === 'cp1' || id === 'cp2'), 'nur Ziele in 300–900 m');
+  }
+  // 8. Keine neuen Angebote in den letzten 10 min
+  {
+    const { g, tick } = setup();
+    const t = g.timers.endAt - 9 * MIN;
+    g.missions.nextAt = t;
+    tick(t);
+    assert.equal(g.missions.offers.length, 0);
+  }
+  // 9. Zonenstufe angekündigt, Ziel liegt draußen → ohne Strafe beendet (auch beim Anwenden, wenn ohne Vorwarnung)
+  for (const warn of [true, false]) {
+    const { g, T0, tick, offerOf } = setup();
+    const t = T0 + 5 * MIN;
+    tick(t);
+    const o = offerOf();
+    respondMission(g, o.hiderId, o.id, true, t);
+    const at = t + 2 * MIN;
+    g.zoneStages = [{ k: 1, at, warnAt: warn ? t + MIN : at, lat: VS.lat, lng: VS.lng, radius: 300, warned: false, applied: false }];
+    const pings = g.pings.length;
+    g.events.splice(0);
+    tick(warn ? t + MIN : at);
+    assert.equal(g.missions.active.length, 0, 'Mission abgebrochen');
+    assert.equal(g.pings.length, pings, 'ohne Strafe');
+    assert.ok(textsTo(g, o.hiderId).some((x) => x.includes('Ziel liegt bald außerhalb der Zone, Mission ohne Strafe beendet')));
+    assert.ok(g.roundLog.some((e) => e.kind === 'mission' && e.result === 'cancelled'));
+  }
+  {
+    // offenes Angebot fällt auch weg
+    const { g, T0, tick } = setup();
+    const t = T0 + 5 * MIN;
+    tick(t);
+    g.zoneStages = [{ k: 1, at: t + 2 * MIN, warnAt: t + 10_000, lat: VS.lat, lng: VS.lng, radius: 300, warned: false, applied: false }];
+    tick(t + 10_000);
+    assert.equal(g.missions.offers.length, 0, 'Angebot abgebrochen');
+  }
+  // 10. Gefangen mit Mission → Kreis weg; Hider mit Angebot verlässt das Spiel → Angebot geht weiter
+  {
+    const { g, T0, tick, offerOf, hunter } = setup({ infection: true });
+    const t = T0 + 5 * MIN;
+    tick(t);
+    const o = offerOf();
+    respondMission(g, o.hiderId, o.id, true, t);
+    g.markCaught(hunter, g.players.get(o.hiderId), t + 1000);
+    assert.deepEqual(g.view(hunter.id, t + 1000).missions, []);
+    assert.equal(g.view(o.hiderId, t + 1000).me.mission, null);
+    assert.ok(g.roundLog.some((e) => e.kind === 'mission' && e.result === 'caught'));
+  }
+  {
+    const { g, T0, tick, offerOf } = setup();
+    const t = T0 + 5 * MIN;
+    tick(t);
+    const o = offerOf();
+    g.removePlayer(o.hiderId);
+    assert.equal(g.missions.offers.length, 1, 'Angebot geht weiter');
+    assert.notEqual(offerOf().hiderId, o.hiderId);
+  }
+  {
+    const { g, T0, tick, offerOf, hunter } = setup();
+    const t = T0 + 5 * MIN;
+    tick(t);
+    const o = offerOf();
+    respondMission(g, o.hiderId, o.id, true, t);
+    g.removePlayer(o.hiderId);
+    assert.deepEqual(g.view(hunter.id, t).missions, [], 'Mission weg, wenn der Hider geht');
+    assert.ok(g.roundLog.some((e) => e.kind === 'mission' && e.result === 'left'));
+  }
+  // 11. Checkpoint außerhalb der Zone wird nie angeboten
+  {
+    const { g, T0, tick } = setup();
+    // Hider am Nordrand, einziger passender Checkpoint liegt außerhalb der Zone
+    g.settings.checkpoints = [
+      { id: 'out', name: 'Draußen', ...north(1500) },
+      ...[200, 300, 400].map((m, i) => ({ id: `s${i}`, name: `S${i}`, lat: VS.lat - m / 111320, lng: VS.lng })),
+    ];
+    tick(T0 + 5 * MIN, north(1100));
+    assert.equal(g.missions.offers.length, 0);
+  }
+  // 12. Kein passender Checkpoint → kein Angebot, kein Fehler, Rhythmus läuft weiter
+  {
+    const { g, T0, tick } = setup({ cps: [100, 150, 200] });
+    const t = T0 + 5 * MIN;
+    tick(t);
+    assert.equal(g.missions.offers.length, 0);
+    assert.equal(g.missions.nextAt, t + MISSION.everyMs.often);
+  }
+  // 13. Zurück zur Lobby und neue Runde → nichts übrig
+  {
+    const { g, T0, tick, offerOf, host } = setup();
+    const t = T0 + 5 * MIN;
+    tick(t);
+    respondMission(g, offerOf().hiderId, offerOf().id, true, t);
+    tick(g.missions.nextAt);
+    g.end(null, 'Test');
+    assert.deepEqual(g.view(host.id).missions, []);
+    g.backToLobby(host.id);
+    g.start(host.id);
+    assert.equal(g.missions.offers.length + g.missions.active.length, 0);
+  }
+  // 14. Fremdes oder abgelaufenes Angebot
+  {
+    const { g, T0, tick, offerOf, hiders } = setup();
+    const t = T0 + 5 * MIN;
+    tick(t);
+    const o = offerOf();
+    const other = hiders.find((h) => h.id !== o.hiderId);
+    assert.throws(() => respondMission(g, other.id, o.id, true, t), /Dieses Angebot gilt nicht mehr\./);
+    assert.throws(() => respondMission(g, o.hiderId, 'quatsch', true, t), /Dieses Angebot gilt nicht mehr\./);
+    assert.throws(() => respondMission(g, o.hiderId, o.id, true, o.until + 1), /Dieses Angebot gilt nicht mehr\./);
+  }
+  console.log('✓ Missionen: Ablauf');
+}
+
 function client(port) {
   const s = io(`http://localhost:${port}`, { transports: ['websocket'], forceNew: true });
   s.state = null;
@@ -851,6 +1251,12 @@ async function serverTest() {
     assert.ok(hv.every((p) => !('catchCode' in p)), 'Fang-Codes werden nicht verraten');
     const sv = hiders[0].state.players.filter((p) => p.role === 'hunter');
     assert.ok(sv.every((p) => p.pos === null), 'Hider sehen keine Jäger');
+    // Missionen über den Socket: unbekanntes Angebot gibt eine verständliche Meldung
+    const mres = await hiders[0].call('mission', { id: 'gibtsnicht', accept: true });
+    assert.equal(mres.ok, false);
+    assert.equal(mres.error, 'Dieses Angebot gilt nicht mehr.');
+    assert.deepEqual(hunters[0].state.missions, [], 'Missionen aus: keine Kreise');
+    assert.equal(hiders[0].state.me.missionOffer, null);
 
     // Alle Hider fangen
     for (const h of hiders) {
@@ -934,6 +1340,8 @@ accessTests();
 rerollTests();
 firstTimeTests();
 tensionTests();
+missionRuleTests();
+missionFlowTests();
 await serverTest();
 console.log('Alle Tests bestanden.');
 process.exit(0);

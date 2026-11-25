@@ -10,6 +10,7 @@ Eine Web-App für Manhunt mit Freunden. Sie läuft direkt im Handy-Browser, ohne
 - [Spielregeln](#spielregeln)
 - [Joker](#joker)
 - [Special Events](#special-events)
+- [Missionen](#missionen)
 - [Ablauf in der App](#ablauf-in-der-app)
 - [Bisherige Spiele](#bisherige-spiele)
 - [Tipps fürs Handy](#tipps-fürs-handy)
@@ -121,6 +122,25 @@ Optional, in den Regeln auf „Selten“ (etwa 2 pro Stunde) oder „Oft“ (etw
 | 💰 Kopfgeld | Ein Hider ist 2 Minuten live sichtbar. Wer durchhält, bekommt einen Joker, sonst bekommen die Jäger einen. |
 | 🔄 Rollentausch | Ein Jäger wird Hider, mit 2 Minuten Schutz (unsichtbar und nicht fangbar). Gibt es nur einen Jäger, kommt stattdessen ein anderes Event. |
 
+## Missionen
+
+Optional, in Schritt 3 „Regeln“ auf „Selten“ (etwa alle 12 Minuten ein Angebot) oder „Oft“ (etwa alle 6 Minuten) einstellbar. Bei „Ich spiele zum ersten Mal“ sind Missionen aus.
+
+**Ablauf:**
+
+1. **Angebot:** Ab und zu bekommt ein zufälliger freier Hider ein Angebot nur für sich: ein Checkpoint 300 bis 900 m entfernt, Zeitlimit, Belohnung und der Hinweis „Die Jäger sehen das Ziel!“. Er hat 60 Sekunden Bedenkzeit. Das erste Angebot kommt frühestens 5 Minuten nach Beginn der Jagd, in den letzten 10 Minuten kommen keine neuen.
+2. **Ablehnen oder keine Antwort:** Ein anderer Hider bekommt ein neues Angebot (höchstens 3 Mal hintereinander). Wer ablehnt, bekommt 5 Minuten lang keins. Ablehnen hat sonst keine Folgen.
+3. **Angenommen:** Alle Jäger sehen am Ziel einen gelben Kreis mit Countdown, aber nicht, wer kommt. Andere Hider sehen nichts. Zuschauer sehen auch den Namen.
+4. **Geschafft:** 30 Sekunden am Stück im Kreis (35 m Radius) bleiben. Belohnung: unter 500 m ein Doppelgänger, ab 500 m eine Tarnkappe oder ein Radar.
+5. **Zeit um:** Ein Strafe-Ping zeigt den echten Standort allen Jägern (Tarnkappe und Doppelgänger helfen nicht, er erscheint auch in der Ping-Spur). Mit Rollentausch-Schutz oder Schutzschild gibt es keine Strafe.
+6. **Gefangen oder Zone:** Wird der Hider unterwegs gefangen, ist die Mission vorbei. Liegt das Ziel außerhalb einer angekündigten neuen Zone, endet die Mission ohne Strafe.
+
+Zeitlimit: 3 Minuten plus 1 Minute je angefangene 150 m (650 m → 8 Minuten). Höchstens 2 Missionen laufen gleichzeitig (offene Angebote zählen mit), nie zwei am selben Checkpoint, jeder Hider höchstens eine.
+
+**Checkpoints auswählen:** Steht Missionen nicht auf „Aus“, erscheint „Checkpoints auswählen“. Das Fenster zeigt eine große Karte mit der Zone und eine Liste. Die App schlägt öffentliche Orte aus OpenStreetMap vor (Plätze, Kirchen, Brunnen, Denkmäler, Spielplätze, Parks; höchstens 30, private Orte nicht). Antippen schaltet zwischen grau (nein) und grün (ja). Mit „Eigenen Punkt setzen“ tippst du einen Ort auf die Karte und gibst ihm einen Namen. Nur sichere, öffentliche Orte wählen! Höchstens 20, für den Start mindestens 3 in der Zone. Die Auswahl sieht nur der Spielleiter, und sein Handy merkt sie sich pro Spielfeld: Mit derselben Zone sind sie beim nächsten Mal schon gewählt.
+
+In „Bisherige Spiele“ stehen die Missionen einer Runde mit Name, Checkpoint und Ergebnis.
+
 ## Ablauf in der App
 
 ### Spielleiter
@@ -152,7 +172,7 @@ Nach „Neues Spiel erstellen“ geht es in 4 Schritten weiter:
 
 1. **Einladen:** Code, QR-Code oder Link (zum Beispiel per WhatsApp).
 2. **Spielfeld:** Ganz oben steht bei einem neuen Spiel **„↩️ Wie letztes Mal (…)“**: Ein Tipp übernimmt Zone, Endzone und Regeln deines letzten gestarteten Spiels (gemerkt auf deinem Handy, ohne Crush und Teams). Sonst einen beliebigen Ort suchen (zum Beispiel „Neu-Ulm“ oder „Glacis Neu-Ulm“), oder Villingen, Schwenningen, ganz VS bzw. „Hier, wo ich bin“ antippen. Die Startzone springt sofort zum besten Treffer, weitere Treffer stehen darunter zum Antippen. Eine selbst gesetzte Endzone wandert dabei mit. Größe Klein, Mittel oder Groß, mit dem Regler feiner einstellbar. Darunter die Endzone (siehe [Zone](#zone)).
-3. **Regeln:** Ganz oben **„🌱 Ich spiele zum ersten Mal“**: Ein Tipp setzt die empfohlenen Einstellungen (siehe unten). Sonst Vorlage Kurz, Normal oder Lang, dazu Fangregel und Special Events. Alles Weitere steht unter „Mehr Einstellungen“.
+3. **Regeln:** Ganz oben **„🌱 Ich spiele zum ersten Mal“**: Ein Tipp setzt die empfohlenen Einstellungen (siehe unten). Sonst Vorlage Kurz, Normal oder Lang, dazu Fangregel, Special Events und [Missionen](#missionen) mit „Checkpoints auswählen“. Alles Weitere steht unter „Mehr Einstellungen“.
 
    **Empfohlene Einstellungen („Ich spiele zum ersten Mal“):** Zone 1,2 km Radius (die Mitte bleibt, wo du sie gesetzt hast), Endzone 300 m und zufällig, 60 Minuten, 5 Minuten Vorsprung, Ping alle 4 Minuten, abklatschen, Special Events aus, 30 Sekunden außerhalb der Zone erlaubt, 4 Zonen-Stufen mit 1 Minute Vorwarnung, Hider sehen sich gegenseitig, Gefangene werden Jäger, 2 Joker pro Hider, für die Jäger 3 Sonder-Pings, 2 Drohnen und 4 Spürnasen, Ping-Spur der letzten 3 Pings, Pings werden nicht schneller, kein Finale, Bonus-Joker erst beim letzten freien Hider. Festgelegt in `public/first-time.js`.
 4. **Teams:** Anzahl der Jäger wählen, Rollen auslosen. Ab der zweiten Runde gibt es zusätzlich **„🔄 Andere Jäger als letzte Runde“**: Das lost möglichst niemanden als Jäger aus, der zuletzt Jäger war. Auf Wunsch ein [Crush-Paar](#crush--optional) festlegen, Checkliste „Bereit?“, dann „Spiel starten“.
@@ -171,13 +191,14 @@ Code eingeben (oder den Link öffnen), Namen eintragen, Standort freigeben. Dana
 
 - Beim Start erklärt ein Fenster jedem seine Rolle. Über den **„?“-Knopf** lässt es sich jederzeit wieder öffnen.
 - **Unteres Feld zum Hochziehen:** Eingeklappt zeigt es nur das Wichtigste: Jäger sehen den Knopf **„Gefangen!“**, Hider ihren **Fang-Code**. Ein Tipp auf **„Joker“** (oder Hochwischen) klappt die Joker auf, Runterwischen klappt sie wieder zu. Läuft gerade ein eigener Joker, zeigt ein gelber Punkt am Joker-Knopf das an.
-- **Eine Hinweis-Leiste:** Oben steht immer nur der wichtigste Hinweis. „+2“ zeigt, dass es weitere gibt, ein Tipp darauf zeigt alle. Reihenfolge: eigene Gefahr (live geortet, außerhalb der Zone, Drohne, Kopfgeld, Schild) → Standort blockiert/aus → Streitfall → Finale → Ping-Vorwarnung → außerhalb der neuen Zone → eigene Joker und Schutz → Special Events und „Zone wird kleiner“ → GPS wird gesucht → Hintergrund-Ortung aktiv. Von den Kurzmeldungen sind im Spiel höchstens zwei gleichzeitig zu sehen.
+- **Eine Hinweis-Leiste:** Oben steht immer nur der wichtigste Hinweis. „+2“ zeigt, dass es weitere gibt, ein Tipp darauf zeigt alle. Reihenfolge: eigene Gefahr (live geortet, außerhalb der Zone, Drohne, Kopfgeld, Schild) → eigene Mission → Standort blockiert/aus → Streitfall → Finale → Ping-Vorwarnung → Missionen (Jäger) → außerhalb der neuen Zone → eigene Joker und Schutz → Special Events und „Zone wird kleiner“ → GPS wird gesucht → Hintergrund-Ortung aktiv. Von den Kurzmeldungen sind im Spiel höchstens zwei gleichzeitig zu sehen.
 - **Fang:** Bei jedem Fang sehen alle kurz ein Fadenkreuz, das sich zuzieht, mit „Gefangen – wer wen“ und wie viele Hider noch frei sind. Das Handy vibriert.
 - **Ping:** Bei jedem Ping läuft eine gelbe Radar-Welle über die Karte (bei Hidern von der eigenen Position aus), die neuen Ping-Punkte leuchten kurz auf.
 - Wer am Handy „Bewegung reduzieren“ eingeschaltet hat, bekommt Fang, Ping und Siegerbildschirm ohne Animation.
 - Die eigene Position ist ein **blauer Pfeil in Laufrichtung**. Mit dem **🧭-Knopf** zeigt er die Richtung des Handys (Kompass).
 - Bleibt das GPS hängen, startet die App es nach 20 Sekunden selbst neu. Oben rechts erscheint dann ein gelber Punkt.
 - Es gibt einen Chat für alle und je einen fürs eigene Team.
+- **Missionen:** Ein Angebot erscheint als Karte über dem unteren Feld mit Countdown, „Annehmen“ und „Ablehnen“. Die eigene Mission ist ein grüner Kreis auf der Karte, oben steht „Mission: … · Zeit … · noch … m“ und im Kreis „Im Kreis! Bleib stehen: 0:12 / 0:30“. Jäger sehen gelbe Kreise mit Countdown und oben „Mission zu … – Hinterhalt legen!“.
 - **Vorwarnung für Hider:** 30 Sekunden vor jedem Ping erscheint „📍 Ping in … – geh in Deckung!“, und das Handy vibriert kurz, ohne Ton. iPhones erlauben Websites kein Vibrieren, dort gibt es nur den Hinweis.
 
 ### Nach dem Spiel
@@ -301,6 +322,9 @@ node test/bots.js ABCD 5    # 5 Bots treten Spiel ABCD bei und laufen herum
 - `server/access.js`: Spielleiter-Passwörter (Hauptpasswort und Gruppen aus `GUEST_PASSWORDS`).
 - `server/logins.js`: Anmelde-Liste der Spielleiter-Passwörter (Geräte-Nummer aus `public/device.js`, Gerätetyp, gekürzte IP, 30 Tage).
 - `server/geocode.js`: Ortssuche über Nominatim (OpenStreetMap). Der Server fragt an, höchstens einmal pro Sekunde, Treffer werden einen Tag gemerkt.
+- `server/missions.js`: Missionen (Checkpoints): Angebote, Zeit im Kreis, Belohnung, Strafe-Ping. Die Jäger erfahren nie, wer eine Mission hat.
+- `server/places.js`: Vorschläge für Checkpoints über die Overpass-API (OpenStreetMap). Der Server fragt an, Treffer werden einen Tag gemerkt (Adresse `/api/places`).
+- `public/checkpoints.js`: das Fenster „Checkpoints auswählen“ (Karte und Liste, eigene Punkte). Die Auswahl merkt sich das Handy pro Spielfeld.
 - `scripts/check-live.mjs` und `.githooks/pre-push`: Push-Sperre, solange auf Render ein Spiel läuft.
 - `server/index.js`: Webserver mit Echtzeit-Verbindung (Socket.IO), Anmeldung als Spielleiter, OwnTracks-Endpunkt (`/owntracks`, Basic-Auth mit Spieler-ID und geheimem Token) und Speicherung der Spielstände.
 - `public/`: die Web-App (HTML, CSS, JavaScript, Karte mit Leaflet).

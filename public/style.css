@@ -910,3 +910,46 @@ svg.i {
 @keyframes sc-pulse { from { transform: scale(0.2); opacity: 1; } }
 @keyframes sc-close { from { transform: scale(2.2); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { #home.active .sc * { animation: none !important; } }
+
+/* Missionen: Checkpoints auswählen */
+.checkpoints-btn { width: 100%; margin-top: 12px; }
+.checkpoints-btn.warn { border-color: var(--ping); color: var(--ping); }
+.modal-box.cp-box { max-width: 560px; height: 94vh; height: 94dvh; overflow-y: auto; }
+.cp-map { height: 46vh; min-height: 240px; border-radius: var(--radius); overflow: hidden; margin-top: 10px; }
+.cp-tools { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
+.cp-tools .btn.active { background: var(--accent); color: var(--on-accent); }
+#cpCount.warn { color: var(--ping); }
+.cp-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.cp-row { display: flex; align-items: center; gap: 8px; background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius-ctl); padding: 4px 6px; }
+.cp-row.on { border-color: var(--hider); }
+.cp-tog { display: flex; align-items: center; gap: 10px; background: none; border: 0; color: inherit; font: inherit; padding: 6px 4px; min-height: 40px; text-align: left; cursor: pointer; }
+.cp-tog.wide { flex: 1; }
+.cp-check { flex: none; width: 24px; height: 24px; border-radius: 6px; border: 2px solid var(--muted); display: grid; place-items: center; font-weight: 700; color: var(--on-accent); }
+.cp-row.on .cp-check { background: var(--hider); border-color: var(--hider); }
+.cp-text { display: grid; }
+.cp-text small { color: var(--muted); font-size: 13px; }
+.cp-name { flex: 1; min-width: 0; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+.cp-del { background: none; border: 0; color: var(--muted); font-size: 18px; min-width: 40px; min-height: 40px; cursor: pointer; }
+
+/* Missionen im Spiel */
+.mission-offer {
+  position: absolute; z-index: 502; left: 8px; right: 8px; bottom: calc(var(--dock-h, 80px) + var(--tab-h, 62px) + 10px);
+  background: var(--panel); border: 2px solid var(--ping); border-radius: var(--radius); padding: 12px 14px;
+  box-shadow: 0 6px 24px #000c; animation: sheet-in 0.2s ease-out;
+}
+.mission-offer[hidden] { display: none; }
+.mission-offer p { margin: 4px 0; font-size: 14px; }
+.mo-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 16px; }
+.mo-count { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: var(--ping); }
+.mo-target { font-size: 16px !important; }
+.mo-warn { color: var(--ping); font-weight: 600; }
+.mission-offer .row { display: flex; gap: 8px; margin-top: 10px; }
+.mission-offer .row .btn { flex: 1; }
+.mk-mission {
+  width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 16px;
+  background: var(--ping); color: #321; border: 3px solid #fff; box-shadow: 0 2px 8px #000a;
+}
+.mk-mission.own { background: var(--hider); color: #062; }
+@media (min-width: 600px) {
+  .mission-offer { left: 50%; right: auto; width: 520px; transform: translateX(-50%); }
+}

@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node --env-file-if-exists=.env server/index.js",
     "dev": "ALLOW_SIM=1 node --env-file-if-exists=.env --watch server/index.js",
-    "test": "node test/smoke.js && node test/archive.js && node test/geocode.js && node test/share.js",
+    "test": "node test/smoke.js && node test/archive.js && node test/geocode.js && node test/places.js && node test/share.js",
     "simulate": "node test/simulation.js",
     "load": "node test/load.js",
     "check-live": "node scripts/check-live.mjs"

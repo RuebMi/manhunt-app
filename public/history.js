@@ -31,6 +31,7 @@ const ROLES = { hunter: '🎯 Jäger', hider: '🏃 Hider' };
 const roleName = (r) => ROLES[r] || String(r ?? '');
 const CATCH = { touch: 'Abklatschen', arm: 'Armlänge' };
 const EVENTS_MODE = { rare: 'selten', often: 'oft' };
+const MISSION_RESULT = { done: 'geschafft', failed: 'gescheitert (Strafe-Ping)', caught: 'unterwegs gefangen', cancelled: 'abgebrochen (Zone)', left: 'Spiel verlassen' };
 const min = (n) => Number(n ?? 0).toLocaleString('de-DE', { maximumFractionDigits: 1 });
 const named = (table, key) => (table[key] ? `${table[key][0]} ${table[key][1]}` : String(key));
 
@@ -271,6 +272,7 @@ function rulesLine(s) {
   if (s.shrink) bits.push('schrumpfende Zone');
   if (s.catchRule) bits.push(`Fangen: ${CATCH[s.catchRule] || s.catchRule}`);
   if (EVENTS_MODE[s.eventsMode]) bits.push(`Events: ${EVENTS_MODE[s.eventsMode]}`);
+  if (EVENTS_MODE[s.missionsMode]) bits.push(`Missionen: ${EVENTS_MODE[s.missionsMode]}`);
   if (s.infection) bits.push('Infektion');
   return bits.map(esc).join(' · ');
 }
@@ -296,6 +298,9 @@ function renderDetail(d) {
   const events = (d.events || [])
     .map((e) => `<li><span>${esc(named(EVENTS, e.type))}</span><small>${esc(min(e.atMin))} min</small></li>`)
     .join('');
+  const missions = (d.missions || [])
+    .map((m) => `<li><span>${esc(m.name)} → ${esc(m.checkpoint)}<br><small>${esc(MISSION_RESULT[m.result] || m.result)}</small></span><small>${esc(min(m.atMin))} min</small></li>`)
+    .join('');
   const trophies = (d.trophies || []).map((t) => `<li><span>🏆 ${esc(t.name)}</span><small>${esc(TROPHY_WHY[t.why] || t.why)}</small></li>`).join('');
 
   body().innerHTML = `<button type="button" class="back-link" id="historyToList">‹ Zurück zur Liste</button>
@@ -309,6 +314,7 @@ function renderDetail(d) {
     ${trophies ? `<div class="card"><h3>Auszeichnungen</h3><ul class="stats">${trophies}</ul></div>` : ''}
     ${jokers ? `<div class="card"><h3>Eingesetzte Joker</h3><ul class="stats">${jokers}</ul></div>` : ''}
     ${events ? `<div class="card"><h3>Events</h3><ul class="stats">${events}</ul></div>` : ''}
+    ${missions ? `<div class="card"><h3>Missionen</h3><ul class="stats">${missions}</ul></div>` : ''}
     <div class="card">
       <h3>Routen</h3>
       <div class="route-picker" id="historyPicker"></div>

@@ -72,6 +72,7 @@
             <li><span class="num">3</span><div><b>Ping</b>Alle paar Minuten sehen die Jäger auf der Karte, wo die Hider gerade sind.</div></li>
             <li><span class="num">4</span><div><b>Fangen</b>Erwischt? Der Hider zeigt seinen Code, der Jäger tippt ihn ein. Fertig!</div></li>
           </ol>
+          <p class="hint"><svg class="i" aria-hidden="true"><use href="/icons.svg#target"></use></svg> <b>Missionen</b> (wenn eingeschaltet): Ab und zu bekommt ein Hider ein Angebot, zu einem Checkpoint zu laufen und 30 Sekunden dort zu bleiben. Die Jäger sehen das Ziel, aber nicht, wer kommt. Geschafft gibt einen Joker, Zeit um gibt einen Strafe-Ping.</p>
           <p class="hint"><svg class="i" aria-hidden="true"><use href="/icons.svg#alert-triangle"></use></svg> Achte auf den Verkehr, betritt keine Privatgrundstücke und bleib fair.</p>
           <div class="row"><button class="btn primary" data-action="closeModal">Alles klar</button></div>
         </template>
@@ -238,6 +239,16 @@
             <p class="hint">Überraschungen wie Joker-Regen, Jagdfieber, Nebel, Kopfgeld oder Rollentausch – niemand weiß vorher, wann.</p>
           </div>
           <div class="card">
+            <h3>Missionen</h3>
+            <div class="seg" id="missionsSeg">
+              <button data-missions="off">Aus<small>keine</small></button>
+              <button data-missions="rare"><svg class="i" aria-hidden="true"><use href="/icons.svg#target"></use></svg> Selten<small>ca. alle 12 min</small></button>
+              <button data-missions="often"><svg class="i" aria-hidden="true"><use href="/icons.svg#target"></use></svg> Oft<small>ca. alle 6 min</small></button>
+            </div>
+            <p class="hint">Ein Hider bekommt ab und zu ein Angebot: zu einem Checkpoint laufen und 30 s dort bleiben. Die Jäger sehen das Ziel. Geschafft = Joker, Zeit um = Strafe-Ping.</p>
+            <button type="button" class="btn checkpoints-btn" id="checkpointsBtn" data-action="checkpoints" hidden></button>
+          </div>
+          <div class="card">
             <h3>So läuft euer Spiel</h3>
             <ul class="rules" id="rulesSummary"></ul>
           </div>
@@ -353,6 +364,7 @@
     </header>
 
     <div id="banners" class="banners"></div>
+    <div id="missionOffer" class="mission-offer" role="dialog" aria-label="Missions-Angebot" hidden></div>
     <div id="eventOverlay" class="event-overlay" hidden></div>
     <div id="radarWaves" class="radar-waves" aria-hidden="true"></div>
     <div id="moment" class="moment" role="status" hidden></div>

@@ -9,6 +9,7 @@ import { io } from 'socket.io-client';
 import { createArchive } from '../server/archive.js';
 import { createLoginLog, shortIp, deviceName, cleanDevice } from '../server/logins.js';
 import { Game, simplifyTrail, trailDistanceM, distanceM } from '../server/game.js';
+import { missionsTick } from '../server/missions.js';
 
 const VS = { lat: 48.0603, lng: 8.4586 };
 const north = (m) => ({ lat: VS.lat + m / 111320, lng: VS.lng });
@@ -34,6 +35,11 @@ function recordTests() {
   g.useJoker(host.id, 'extraPing');
   g.runEvent('fog');
   g.markCaught(host, max, Date.now());
+  // Eine geschaffte Mission: Lea steht seit 31 s am Checkpoint
+  g.settings.checkpoints = [{ id: 'm1', name: 'Marktplatz', ...north(400) }];
+  g.updatePos(lea.id, { ...north(400), acc: 5, t: Date.now() });
+  g.missions.active.push({ id: 'x', hiderId: lea.id, hiderName: 'Lea', checkpointId: 'm1', reward: 'decoy', until: Date.now() + 300_000, inSince: Date.now() - 31_000 });
+  missionsTick(g, Date.now());
   g.forceEnd(host.id);
 
   const rec = g.pendingArchive;
@@ -74,6 +80,8 @@ function recordTests() {
 
   assert.ok(data.jokersUsed.some((j) => j.name === 'Host' && j.type === 'extraPing'));
   assert.ok(data.events.some((e) => e.type === 'fog'));
+  assert.deepEqual(data.missions.map((x) => [x.name, x.checkpoint, x.result]), [['Lea', 'Marktplatz', 'done']]);
+  assert.equal(data.settings.missionsMode, 'off');
   assert.equal(data.players.find((p) => p.name === 'Lea').trophy, null);
   console.log('✓ Datensatz');
 }
@@ -453,6 +461,11 @@ async function httpTests() {
     assert.equal((await get('/api/geocode')).status, 400);
     assert.equal((await get('/api/geocode?q=%20%20')).status, 400);
     assert.equal((await get(`/api/geocode?q=${'x'.repeat(101)}`)).status, 400);
+    // Checkpoint-Vorschläge: ungültige Eingaben ohne Anfrage ins Internet abgelehnt
+    assert.equal((await get('/api/places')).status, 400);
+    assert.equal((await get('/api/places?lat=48.06&lng=8.45&radius=50')).status, 400);
+    assert.equal((await get('/api/places?lat=48.06&lng=8.45&radius=7000')).status, 400);
+    assert.equal((await get('/api/places?lat=abc&lng=8.45&radius=1000')).status, 400);
 
     for (let i = 0; i < 5; i++) await get('/api/rounds', 'falsch');
     assert.equal((await get('/api/rounds', 'haupt-test')).status, 429);

@@ -4,6 +4,7 @@ import { firstTimeUpdate, isFirstTime } from './first-time.js';
 import { iconize, observeEmojis } from './icons.js';
 import { addBaseLayer } from './basemap.js';
 import { deviceId } from './device.js';
+import { openCheckpointPicker, CHECKPOINTS_KEY, zoneKey } from './checkpoints.js';
 
 // Emojis in allen angezeigten Texten durch einheitliche Symbole ersetzen (siehe icons.js)
 observeEmojis(document.body);
@@ -531,6 +532,11 @@ function rulesSummary(s) {
   if (events) {
     out.push(['🎲', `<b>Special Events:</b> ${events === 1 ? 'eine Überraschung' : `${events} Überraschungen`} während der Jagd – wann, weiß niemand.`]);
   }
+  if (s.missionsMode === 'rare' || s.missionsMode === 'often') {
+    const every = s.missionsMode === 'often' ? 'oft (etwa alle 6 min)' : 'selten (etwa alle 12 min)';
+    const n = s.checkpoints?.length ? `, ${s.checkpoints.length} Checkpoints` : '';
+    out.push(['🎯', `<b>Missionen:</b> ${every}${n}. Ein Hider kann ein Angebot annehmen: zum Checkpoint laufen und 30 s dort bleiben. Die Jäger sehen das Ziel.`]);
+  }
   out.push(['✋', `${catchRuleText(s)} Dann sofort stehen bleiben und den Code zeigen.`]);
   out.push(['🏆', 'Sind alle Hider gefangen, gewinnen die Jäger – sonst die Hider.']);
   return out;
@@ -604,6 +610,7 @@ function renderHostSetup(v) {
   renderRules($('#rulesSummary'), v.settings);
   $$('#catchSeg button').forEach((b) => b.classList.toggle('active', b.dataset.catch === (v.settings.catchRule ?? 'touch')));
   $$('#eventsSeg button').forEach((b) => b.classList.toggle('active', b.dataset.events === (v.settings.eventsMode ?? 'off')));
+  renderMissionsCard(v);
   renderSettingsForm(v);
 
   // 4 – Teams
@@ -1111,7 +1118,63 @@ document.addEventListener('click', (e) => {
   if (rule) saveSettings({ catchRule: rule.dataset.catch });
   const evMode = e.target.closest('[data-events]');
   if (evMode) saveSettings({ eventsMode: evMode.dataset.events });
+  const misMode = e.target.closest('[data-missions]');
+  if (misMode) setMissionsMode(misMode.dataset.missions);
 });
+
+// ---------------------------------------------------------------- Missionen (Checkpoints)
+// Die gewählten Checkpoints merkt sich das Handy des Spielleiters pro Spielfeld (höchstens 20 Spielfelder).
+function savedCheckpoints(zone) {
+  return store.get(CHECKPOINTS_KEY)?.[zoneKey(zone)] ?? null;
+}
+function rememberCheckpoints(zone, list) {
+  const key = zoneKey(zone);
+  const old = Object.entries(store.get(CHECKPOINTS_KEY) ?? {}).filter(([k]) => k !== key);
+  store.set(CHECKPOINTS_KEY, Object.fromEntries([...old.slice(-19), [key, list]]));
+}
+const checkpointsInZone = (s) => (s.checkpoints ?? []).filter((c) => distanceM(c, s.zone) <= s.zone.radius);
+
+function setMissionsMode(mode) {
+  const s = S.view.settings;
+  if (mode === 'off' || checkpointsInZone(s).length) return saveSettings({ missionsMode: mode });
+  const saved = savedCheckpoints(s.zone);
+  if (saved?.length) {
+    saveSettings({ missionsMode: mode, checkpoints: saved });
+    toast(`${saved.length} Checkpoints von letztem Mal übernommen.`);
+    return;
+  }
+  saveSettings({ missionsMode: mode });
+  openCheckpoints();
+}
+
+function openCheckpoints() {
+  const s = S.view.settings;
+  const zone = { ...s.zone };
+  openCheckpointPicker({
+    zone,
+    chosen: checkpointsInZone(s),
+    makeMap,
+    openModal,
+    closeModal,
+    onSave: (list) => {
+      rememberCheckpoints(zone, list);
+      saveSettings({ checkpoints: list });
+    },
+  });
+}
+
+function renderMissionsCard(v) {
+  const s = v.settings;
+  const mode = s.missionsMode ?? 'off';
+  $$('#missionsSeg button').forEach((b) => b.classList.toggle('active', b.dataset.missions === mode));
+  const btn = $('#checkpointsBtn');
+  btn.hidden = mode === 'off';
+  const n = checkpointsInZone(s).length;
+  const text = n < 3 ? `📍 Noch mindestens 3 Checkpoints auswählen (${n} gewählt)` : `📍 Checkpoints auswählen (${n} gewählt)`;
+  const html = iconize(esc(text));
+  if (btn.innerHTML !== html) btn.innerHTML = html;
+  btn.classList.toggle('warn', n < 3);
+}
 
 const GPS_HELP_BUTTONS =
   '<button class="btn small primary" data-action="gps">Nochmal versuchen</button><button class="btn small" data-action="gpsHelp">So geht’s</button>';
@@ -1466,6 +1529,92 @@ function renderGameMap(v) {
     }, 80);
   }
   renderMarkers(v);
+  renderMissions(v);
+}
+
+// ---------------------------------------------------------------- Missionen im Spiel
+// Der Hider sieht sein Ziel (grüner Kreis), Jäger und Zuschauer sehen alle laufenden
+// Missionen als gelbe Kreise mit Countdown, aber nicht, wer kommt (Zuschauer schon).
+const jokerText = (v, type) => {
+  const j = v.jokerInfo?.[type];
+  return j ? `${j.icon} ${j.name}` : type;
+};
+
+function missionList(v) {
+  const list = (v.missions ?? []).map((m) => ({ ...m, own: false }));
+  if (v.me.mission) list.unshift({ ...v.me.mission, own: true });
+  return list;
+}
+
+function renderMissions(v) {
+  const map = S.maps.game;
+  S.missionLayer ??= L.layerGroup().addTo(map);
+  const list = v.phase === 'hunt' ? missionList(v) : [];
+  const key = list.map((m) => `${m.id}|${m.lat}|${m.lng}|${m.own ? 1 : 0}|${m.hider ?? ''}`).join(';');
+  if (key !== S.missionKey) {
+    S.missionKey = key;
+    S.missionLayer.clearLayers();
+    for (const m of list) {
+      const color = m.own ? '#22d67e' : '#ffb020';
+      L.circle([m.lat, m.lng], { radius: m.radius, color, weight: 3, dashArray: m.own ? null : '6 6', fillOpacity: 0.18, interactive: false }).addTo(S.missionLayer);
+      L.marker([m.lat, m.lng], {
+        interactive: false,
+        zIndexOffset: 500,
+        icon: L.divIcon({
+          className: '',
+          html: iconize(`<div class="mk-mission ${m.own ? 'own' : ''}">🎯<span class="mk-label" data-mission="${esc(m.id)}"></span></div>`),
+          iconSize: [30, 30],
+          iconAnchor: [15, 15],
+        }),
+      }).addTo(S.missionLayer);
+    }
+  }
+  updateMissionLabels(v, now());
+}
+
+function updateMissionLabels(v, t) {
+  const box = S.maps.game?.getContainer();
+  if (!box) return;
+  for (const m of v.phase === 'hunt' ? missionList(v) : []) {
+    const el = box.querySelector(`[data-mission="${CSS.escape(m.id)}"]`);
+    if (!el) continue;
+    const text = m.own ? `${m.name} · ${fmt(m.until - t)}` : `${m.name} · ${fmt(m.until - t)}${m.hider ? ` · ${m.hider}` : ''}`;
+    if (el.textContent !== text) el.textContent = text;
+  }
+}
+
+// Angebot für den Hider: Karte über dem unteren Feld mit Countdown und zwei Knöpfen
+function renderMissionOffer(v, t) {
+  const box = $('#missionOffer');
+  const o = v.me.missionOffer;
+  const show = Boolean(o && o.until > t && v.phase === 'hunt' && S.missionAnswered !== o.id);
+  box.hidden = !show;
+  if (!show) {
+    box.dataset.id = '';
+    return;
+  }
+  if (box.dataset.id !== o.id) {
+    box.dataset.id = o.id;
+    box.innerHTML = iconize(`<div class="mo-head"><b>🎯 Mission für dich</b><span class="mo-count"></span></div>
+      <p class="mo-target"><b>${esc(o.name)}</b> · ${esc(formatDistance(o.distanceM))} entfernt</p>
+      <p class="mo-line">⏱️ ${Math.round(o.timeMs / 60_000)} Minuten Zeit, dann 30 Sekunden im Kreis bleiben</p>
+      <p class="mo-line">🎁 Belohnung: <b>${esc(jokerText(v, o.reward))}</b></p>
+      <p class="mo-warn">⚠️ Die Jäger sehen das Ziel! Schaffst du es nicht, wirst du angepingt.</p>
+      <div class="row"><button class="btn" data-action="missionAnswer" data-accept="0">Ablehnen</button><button class="btn primary" data-action="missionAnswer" data-accept="1">Annehmen</button></div>`);
+  }
+  const count = $('.mo-count', box);
+  const text = fmt(o.until - t);
+  if (count.textContent !== text) count.textContent = text;
+}
+
+async function answerMission(accept) {
+  const o = S.view?.me.missionOffer;
+  if (!o) return;
+  S.missionAnswered = o.id;
+  renderMissionOffer(S.view, now());
+  const r = await send('mission', { id: o.id, accept });
+  if (!r.ok) toast(r.error, 'error');
+  else if (!accept) toast('Angebot abgelehnt.');
 }
 
 function markerFor(p) {
@@ -1741,9 +1890,9 @@ function renderGamePlayers(v) {
 
 // Hinweise für die Leiste oben: [Wichtigkeit, Art, Text]. Kleinere Zahl = wichtiger.
 // Gezeigt wird nur der wichtigste; die anderen klappen über "+N" auf.
-//  10er: Gefahr für mich (live geortet, außerhalb der Zone, Drohne, Kopfgeld, Schild)
+//  10er: Gefahr für mich (live geortet, außerhalb der Zone, Drohne, Kopfgeld, Schild) · 15: eigene Mission
 //  20: Standort blockiert/aus · 30: Streitfall · 40: Finale · 50: Ping-Vorwarnung
-//  55: außerhalb der neuen Zone · 60er: Schutz und Joker · 70er: Ereignisse, Zone wird kleiner
+//  52: Missionen (Jäger) · 55: außerhalb der neuen Zone · 60er: Schutz und Joker · 70er: Ereignisse, Zone wird kleiner
 //  80: GPS wird gesucht/hängt · 90: Hintergrund-Ortung aktiv
 function banners(v) {
   const me = v.me;
@@ -1767,6 +1916,19 @@ function banners(v) {
     if (me.cloakNext) out.push([62, 'info', '👻 Tarnkappe aktiv – du fehlst im nächsten Ping.']);
     if (me.decoyNext) out.push([63, 'info', '🎭 Doppelgänger aktiv – der nächste Ping zeigt einen falschen Ort.']);
     if (pingSoon(v, t)) out.push([50, 'ping', `📍 Ping in ${fmt(v.timers.nextPingAt - t)} – geh in Deckung!`]);
+    const m = v.me.mission;
+    if (m && v.phase === 'hunt') {
+      const inMs = m.inSince ? Math.min(30_000, Math.max(0, t - m.inSince)) : 0;
+      const self = v.players.find((p) => p.id === me.id);
+      const dist = self?.pos ? ` · noch ${formatDistance(Math.max(0, distanceM(self.pos, m) - m.radius))}` : '';
+      out.push([
+        15,
+        'good',
+        inMs > 0
+          ? `🎯 Im Kreis! Bleib stehen: ${fmt(inMs)} / 00:30 · Zeit ${fmt(m.until - t)}`
+          : `🎯 Mission: ${esc(m.name)} · Zeit ${fmt(m.until - t)}${dist}`,
+      ]);
+    }
     if (finaleOn(v, t)) out.push([40, 'warn', `🔥 Finale: Du bist bis zum Schluss live sichtbar! Noch ${fmt(v.timers.endAt - t)}`]);
   }
   if (v.nextZone && v.nextZone.at > t) {
@@ -1799,6 +1961,11 @@ function banners(v) {
     );
   }
   if (v.drone && v.drone.until > t) out.push([73, 'info', `🚁 Drohne verfolgt ${esc(v.drone.name)}: ${fmt(v.drone.until - t)}`]);
+  if (v.phase === 'hunt') {
+    for (const m of v.missions ?? []) {
+      if (m.until > t) out.push([52, 'ping', `🎯 Mission zu „${esc(m.name)}“: ${fmt(m.until - t)}${m.hider ? ` (${esc(m.hider)})` : ' – Hinterhalt legen!'}`]);
+    }
+  }
   return out.sort((x, y) => x[0] - y[0]).map(([, cls, text]) => [cls, text]);
 }
 
@@ -1864,6 +2031,8 @@ function tickGame() {
   const html = iconize(bannerHtml(banners(v)));
   const box = $('#banners');
   if (box.innerHTML !== html) box.innerHTML = html;
+  renderMissionOffer(v, t);
+  updateMissionLabels(v, t);
 
 }
 
@@ -2272,6 +2441,7 @@ document.addEventListener('click', async (e) => {
   } else if (a === 'randomize') check(await send('randomize', { hunters: S.hunterCount }));
   else if (a === 'randomizeNew') check(await send('randomize', { hunters: S.hunterCount, avoidLast: true }));
   else if (a === 'lastSettings') applyLastSettings();
+  else if (a === 'checkpoints') openCheckpoints();
   else if (a === 'shareResult') shareResult();
   else if (a === 'howTo') openModal(iconize($('#howTpl').innerHTML));
   else if (a === 'showRoutes') $('#endRoutes').scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
@@ -2319,6 +2489,7 @@ document.addEventListener('click', async (e) => {
   else if (a === 'disputeDecide') openDisputeDecision(el.dataset.id);
   else if (a === 'compass') toggleCompass();
   else if (a === 'closeEvent') closeEventOverlay();
+  else if (a === 'missionAnswer') answerMission(el.dataset.accept === '1');
   else if (a === 'route') {
     S.routeId = el.dataset.id;
     renderEnd();
@@ -2383,6 +2554,9 @@ function openRoleHelp() {
       `${ping} sehen die Jäger, wo du gerade bist. Das nennt man <b>Ping</b>. Danach am besten den Ort wechseln!`,
       `${catchRuleText(v.settings)} Dann bleibst du stehen, tippst unten auf <b>Dein Fang-Code</b> und zeigst ihn dem Jäger.`,
       'Deine <b>Joker</b> unten kannst du je einmal einsetzen – einfach antippen.',
+      ...(v.settings.missionsMode && v.settings.missionsMode !== 'off'
+        ? ['Ab und zu bekommst du vielleicht eine <b>Mission</b>: zum Checkpoint laufen und 30 s im Kreis bleiben. Geschafft = Joker, Zeit um = Strafe-Ping. Ablehnen ist okay.']
+        : []),
       'Lass die Seite offen und den Bildschirm an.',
     ];
   } else {
@@ -2395,6 +2569,9 @@ function openRoleHelp() {
       `${catchRuleText(v.settings)} Dann lass dir den Code zeigen und tippe unten auf <b>Gefangen!</b>.`,
       'Gibt ein Hider seinen Code nicht her, melde im Fang-Fenster einen <b>Streitfall</b> – der Spielleiter entscheidet.',
       'Die <b>Team-Joker</b> unten teilt ihr euch – sprecht euch im Chat ab.',
+      ...(v.settings.missionsMode && v.settings.missionsMode !== 'off'
+        ? ['Ein <b class="t-ping">gelber Kreis</b> mit Countdown ist eine <b>Mission</b>: Ein Hider will dorthin. Wer, wisst ihr nicht – legt euch auf die Lauer!']
+        : []),
     ];
   }
   openModal(

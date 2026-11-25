@@ -8,6 +8,7 @@ export const FIRST_TIME_SETTINGS = {
   durationMin: 60,
   catchRule: 'touch', // abklatschen
   eventsMode: 'off', // Special Events aus
+  missionsMode: 'off', // Missionen aus
   headStartMin: 5,
   pingIntervalMin: 4,
   outGraceSec: 30,

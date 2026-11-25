@@ -129,6 +129,12 @@
         Der Server merkt sich Suchbegriffe und Treffer bis zu einen Tag lang, damit dieselbe Suche nicht erneut angefragt werden muss.
       </li>
       <li>
+        <b>Checkpoint-Vorschläge:</b> Schaltet der Spielleiter Missionen ein, sucht der Manhunt-Server öffentliche Orte im Spielfeld
+        (zum Beispiel Plätze, Spielplätze, Brunnen) über die Overpass-API, einen Suchdienst für OpenStreetMap-Daten (betrieben mit Unterstützung der FOSSGIS e.&nbsp;V., Deutschland).
+        Dabei werden nur Mittelpunkt und Größe des Spielfelds übertragen. Die Anfrage kommt vom Server, die IP-Adressen der Spieler werden nicht weitergegeben.
+        Der Server merkt sich die Treffer bis zu einen Tag lang.
+      </li>
+      <li>
         <b>Programmbibliotheken:</b> Die Kartenbibliotheken Leaflet und MapLibre und der QR-Code-Generator werden über cdnjs geladen,
         einen Dienst von Cloudflare, Inc. (San Francisco, USA). Dabei wird deine IP-Adresse an Cloudflare übertragen.
         Cloudflare ist nach dem EU-US Data Privacy Framework zertifiziert.
@@ -142,7 +148,7 @@
     <h2>8. Was auf deinem Handy gespeichert wird</h2>
     <p>
       Damit du nach einem Neuladen wieder im selben Spiel bist, speichert die App im Speicher deines Browsers (Local Storage):
-      deinen Spielnamen, die Zugangsdaten zu deinem aktuellen Spiel und, wenn du Spielleiter bist, das Spielleiter-Passwort.
+      deinen Spielnamen, die Zugangsdaten zu deinem aktuellen Spiel und, wenn du Spielleiter bist, das Spielleiter-Passwort und die ausgewählten Checkpoints für Missionen (pro Spielfeld).
       Wenn du dich mit einem Spielleiter-Passwort anmeldest, kommt eine zufällige <b>Geräte-Nummer</b> dazu. Sie wird nur bei diesen Anmeldungen
       mitgeschickt (Abschnitt 5) und verrät nicht, wem das Handy gehört.
       Diese Daten verlassen dein Handy nur, wenn du sie selbst wieder an den Server schickst. Du kannst sie löschen, indem du die

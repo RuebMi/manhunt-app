@@ -6,9 +6,11 @@ import { fileURLToPath } from 'node:url';
 import { createAccess, parseGuestPasswords } from './access.js';
 import { Server } from 'socket.io';
 import { Game, GameError, makeGameCode } from './game.js';
+import { respondMission } from './missions.js';
 import { createArchive } from './archive.js';
 import { createLoginLog } from './logins.js';
 import { createGeocoder } from './geocode.js';
+import { createPlaceFinder } from './places.js';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DATA_FILE = process.env.DATA_FILE || path.join(ROOT, 'data', 'games.json');
@@ -148,6 +150,27 @@ app.get('/api/geocode', async (req, res) => {
   } catch (e) {
     console.error('Ortssuche fehlgeschlagen:', e.message);
     res.status(502).json({ error: 'Die Ortssuche ist gerade nicht erreichbar.' });
+  }
+});
+
+// Vorschläge für Checkpoints (Missionen), siehe server/places.js. Zählt bei den 10 Suchen pro Minute mit.
+const placeFinder = createPlaceFinder();
+app.get('/api/places', async (req, res) => {
+  const lat = Number(req.query.lat);
+  const lng = Number(req.query.lng);
+  const radius = Number(req.query.radius);
+  const ok = Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && radius >= 100 && radius <= 6000;
+  if (!req.query.lat || !req.query.lng || !ok) return res.status(400).json({ error: 'Ungültiges Spielfeld.' });
+  const now = Date.now();
+  const recent = (searches.get(req.ip) ?? []).filter((t) => now - t < 60_000);
+  if (recent.length >= SEARCH_LIMIT) return res.status(429).json({ error: 'Zu viele Suchen. Warte kurz.' });
+  recent.push(now);
+  searches.set(req.ip, recent);
+  try {
+    res.json(await placeFinder.find({ lat, lng, radius }));
+  } catch (e) {
+    console.error('Checkpoint-Vorschläge fehlgeschlagen:', e.message);
+    res.status(502).json({ error: 'Vorschläge gerade nicht verfügbar.' });
   }
 });
 
@@ -422,6 +445,11 @@ io.on('connection', (socket) => {
   handle(socket, 'resolveDispute', ({ id, accept }) => {
     const { game, player } = context(socket);
     return game.resolveDispute(player.id, id, Boolean(accept));
+  });
+
+  handle(socket, 'mission', ({ id, accept }) => {
+    const { game, player } = context(socket);
+    return respondMission(game, player.id, String(id ?? ''), Boolean(accept), Date.now());
   });
 
   handle(socket, 'joker', ({ type }) => {
