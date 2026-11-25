@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#0b0d10" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Manhunt" />
+  <title>Manhunt</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/icon-180.png" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/5.6.0/maplibre-gl.min.css" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <!-- START -->
+  <section id="home" class="screen">
+    <div class="home-inner">
+      <div class="logo">
+        <div class="logo-crosshair" aria-hidden="true"></div>
+        <h1>MAN<span>HUNT</span></h1>
+        <p class="tagline">Real-Life-Jagd durch deine Stadt</p>
+        <a class="made-by" href="https://www.ruebstudio.de/de" target="_blank" rel="noopener">made by Michael Rüb und <b>ruebstudio</b></a>
+        <div class="legal-links"><a href="/impressum">Impressum</a> · <a href="/datenschutz">Datenschutz</a></div>
+      </div>
+
+      <!-- Auswahl -->
+      <div id="homeMenu" class="home-step">
+        <button class="big-choice primary" data-home="join">
+          <span class="bc-icon"><svg class="i" aria-hidden="true"><use href="/icons.svg#device-gamepad-2"></use></svg></span>
+          <span class="bc-text"><b>Spiel beitreten</b><small>Ein Freund hat dir einen Code gegeben</small></span>
+          <span class="bc-arrow">›</span>
+        </button>
+        <button class="big-choice" data-home="create">
+          <span class="bc-icon"><svg class="i" aria-hidden="true"><use href="/icons.svg#plus"></use></svg></span>
+          <span class="bc-text"><b>Neues Spiel erstellen</b><small>Du bist der Spielleiter</small></span>
+          <span class="bc-arrow">›</span>
+        </button>
+        <button class="big-choice" data-open="history">
+          <span class="bc-icon"><svg class="i" aria-hidden="true"><use href="/icons.svg#history"></use></svg></span>
+          <span class="bc-text"><b>Bisherige Spiele</b><small>Runden ab 20 Minuten ansehen</small></span>
+          <span class="bc-arrow">›</span>
+        </button>
+
+        <!-- Schaufenster: worum es geht, in drei Bildern -->
+        <div class="showcase" role="list" aria-label="So funktioniert's">
+          <figure class="sc sc-hide" role="listitem">
+            <svg viewBox="0 0 100 72" aria-hidden="true"><path class="sc-street" d="M0 24h100M0 52h100M28 0v72M72 0v72"/><rect class="sc-house" x="38" y="31" width="24" height="14" rx="2"/><circle class="sc-zone" cx="50" cy="38" r="30"/><circle class="sc-hider" cx="57" cy="40" r="6"/></svg>
+            <figcaption><b>Verstecken</b><small>Hider laufen los</small></figcaption>
+          </figure>
+          <figure class="sc sc-ping" role="listitem">
+            <svg viewBox="0 0 100 72" aria-hidden="true"><path class="sc-street" d="M0 24h100M0 52h100M28 0v72M72 0v72"/><circle class="sc-ring r2" cx="50" cy="38" r="28"/><circle class="sc-ring r1" cx="50" cy="38" r="17"/><circle class="sc-dot" cx="50" cy="38" r="6"/></svg>
+            <figcaption><b>Ping</b><small>Kurz sichtbar</small></figcaption>
+          </figure>
+          <figure class="sc sc-catch" role="listitem">
+            <svg viewBox="0 0 100 72" aria-hidden="true"><path class="sc-street" d="M0 24h100M0 52h100M28 0v72M72 0v72"/><circle class="sc-hider" cx="50" cy="36" r="6"/><g class="sc-cross"><circle cx="50" cy="36" r="16"/><path d="M50 12v11M50 49v11M26 36h11M63 36h11"/></g></svg>
+            <figcaption><b>Fangen</b><small>Code eintippen</small></figcaption>
+          </figure>
+        </div>
+        <button type="button" class="how-link" data-action="howTo">Wie geht das? Ganze Anleitung ›</button>
+
+        <!-- Inhalt für das Fenster "Ganze Anleitung" -->
+        <template id="howTpl">
+          <h2>So funktioniert's</h2>
+          <ol class="how-steps">
+            <li><span class="num">1</span><div><b>Teams bilden</b>Ein paar sind <b class="t-hunter">Jäger</b>, alle anderen sind <b class="t-hider">Hider</b> und verstecken sich.</div></li>
+            <li><span class="num">2</span><div><b>Weglaufen</b>Die Hider bekommen ein paar Minuten Vorsprung. Die Jäger warten so lange.</div></li>
+            <li><span class="num">3</span><div><b>Ping</b>Alle paar Minuten sehen die Jäger auf der Karte, wo die Hider gerade sind.</div></li>
+            <li><span class="num">4</span><div><b>Fangen</b>Erwischt? Der Hider zeigt seinen Code, der Jäger tippt ihn ein. Fertig!</div></li>
+          </ol>
+          <p class="hint"><svg class="i" aria-hidden="true"><use href="/icons.svg#alert-triangle"></use></svg> Achte auf den Verkehr, betritt keine Privatgrundstücke und bleib fair.</p>
+          <div class="row"><button class="btn primary" data-action="closeModal">Alles klar</button></div>
+        </template>
+      </div>
+
+      <!-- Beitreten -->
+      <form id="joinForm" class="home-step card" hidden>
+        <button type="button" class="back-link" data-home="menu">‹ Zurück</button>
+        <h2>Spiel beitreten</h2>
+        <label>Spiel-Code
+          <small class="label-hint">4 Buchstaben – die zeigt dir der Spielleiter</small>
+          <input id="joinCode" name="code" maxlength="4" autocomplete="off" autocapitalize="characters" placeholder="ABCD" required />
+        </label>
+        <label>Dein Name
+          <small class="label-hint">So sehen dich die anderen</small>
+          <input id="joinName" name="name" maxlength="20" autocomplete="nickname" placeholder="z. B. Max" required />
+        </label>
+        <button class="btn primary big" type="submit">Beitreten</button>
+      </form>
+
+      <!-- Erstellen -->
+      <form id="createForm" class="home-step card" hidden>
+        <button type="button" class="back-link" data-home="menu">‹ Zurück</button>
+        <h2>Neues Spiel</h2>
+        <p class="hint">Als Spielleiter lädst du gleich deine Freunde ein und stellst alles ein – Schritt für Schritt.</p>
+        <label>Dein Name
+          <input id="createName" name="name" maxlength="20" autocomplete="nickname" placeholder="z. B. Lea" required />
+        </label>
+        <label>Spielleiter-Passwort
+          <input id="createPassword" name="password" type="password" maxlength="40" autocomplete="off" autocapitalize="characters" spellcheck="false" required />
+        </label>
+        <button class="btn primary big" type="submit">Weiter</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- LOBBY -->
+  <section id="lobby" class="screen">
+    <header class="lobby-head">
+      <button class="icon-btn" data-action="leave" title="Spiel verlassen" aria-label="Spiel verlassen"><svg class="i" aria-hidden="true"><use href="/icons.svg#x"></use></svg></button>
+      <!-- Den Code sieht nur der Spielleiter oben. Mitspieler laden über ⤴ ein (Code und QR-Code im Fenster). -->
+      <div class="code-block host-only">
+        <div class="code-label">Spiel-Code</div>
+        <div id="lobbyCode" class="code"></div>
+      </div>
+      <div class="group-head guest-only" id="guestGroup"></div>
+      <button class="icon-btn" data-action="share" title="Freunde einladen" aria-label="Freunde einladen"><svg class="i" aria-hidden="true"><use href="/icons.svg#share"></use></svg></button>
+    </header>
+
+    <!-- Spielleiter: Einrichtung in 4 Schritten -->
+    <div class="host-only">
+      <nav class="stepper" id="stepper">
+        <button data-step="1"><i>1</i><span>Einladen</span></button>
+        <button data-step="2"><i>2</i><span>Spielfeld</span></button>
+        <button data-step="3"><i>3</i><span>Regeln</span></button>
+        <button data-step="4"><i>4</i><span>Teams</span></button>
+      </nav>
+
+      <div class="lobby-body">
+        <div class="step" data-step="1">
+          <p class="group-hello" id="hostGroupHello"></p>
+          <div class="step-head">
+            <h2>Freunde einladen</h2>
+            <p>Zeig deinen Freunden den Code oder lass sie den QR-Code mit der Kamera scannen.</p>
+          </div>
+          <div class="card invite">
+            <div class="invite-code" id="inviteCode"></div>
+            <div class="qr" id="inviteQr"></div>
+            <div class="row">
+              <button class="btn" data-action="copyLink"><svg class="i" aria-hidden="true"><use href="/icons.svg#link"></use></svg> Link kopieren</button>
+              <button class="btn primary" data-action="shareLink" id="shareLinkBtn"><svg class="i" aria-hidden="true"><use href="/icons.svg#share"></use></svg> Teilen</button>
+            </div>
+          </div>
+          <div class="card gps-card" data-gps-card></div>
+          <div class="card bg-card" data-bg-card></div>
+          <div class="card">
+            <h3>Schon dabei <span id="joinedCount" class="muted"></span></h3>
+            <ul id="joinedList" class="name-chips"></ul>
+          </div>
+        </div>
+
+        <div class="step" data-step="2">
+          <div class="step-head">
+            <h2>Wo spielt ihr?</h2>
+            <p>Wähle das Gebiet. Wer es zu lange verlässt, wird für die Jäger sichtbar.</p>
+          </div>
+          <button class="btn last-settings" id="lastSettingsBtn" data-action="lastSettings" hidden></button>
+          <div class="card">
+            <form id="placeSearch" class="place-search">
+              <input id="placeInput" type="search" placeholder="Ort suchen, z. B. Neu-Ulm" maxlength="100" autocomplete="off" enterkeyhint="search" aria-label="Ort suchen" />
+              <button class="btn" type="submit"><svg class="i" aria-hidden="true"><use href="/icons.svg#search"></use></svg> Suchen</button>
+            </form>
+            <div id="placeResults" class="place-results"></div>
+            <div class="chips">
+              <button class="chip" data-zone="villingen">Villingen</button>
+              <button class="chip" data-zone="schwenningen">Schwenningen</button>
+              <button class="chip" data-zone="vs">Ganz VS</button>
+              <button class="chip" data-zone="me"><svg class="i" aria-hidden="true"><use href="/icons.svg#map-pin"></use></svg> Hier, wo ich bin</button>
+            </div>
+            <div class="seg tap-seg" id="tapSeg" hidden>
+              <button data-tap="zone"><svg class="i c-hunter" aria-hidden="true"><use href="/icons.svg#circle-dashed"></use></svg> Startzone<small>Tippen verschiebt</small></button>
+              <button data-tap="final"><svg class="i c-ping" aria-hidden="true"><use href="/icons.svg#circle-dashed"></use></svg> Endzone<small>Tippen verschiebt</small></button>
+            </div>
+            <div id="zoneMap" class="zone-map"></div>
+            <p class="hint" id="tapHint">Tipp: Tippe auf die Karte, um die Mitte zu verschieben.</p>
+            <h3>Wie groß?</h3>
+            <div class="seg" id="sizeSeg">
+              <button data-size="700">Klein<small>700 m</small></button>
+              <button data-size="1200">Mittel<small>1,2 km</small></button>
+              <button data-size="2500">Groß<small>2,5 km</small></button>
+            </div>
+            <label class="range">Genau einstellen: <b id="radiusLabel"></b> Radius
+              <input id="radiusInput" type="range" min="200" max="6000" step="100" />
+            </label>
+          </div>
+          <div class="card" id="finalCard">
+            <h3>Endzone</h3>
+            <p class="hint">So sieht die Zone nach der letzten Stufe aus. Die Stufen dazwischen wandern gleichmäßig dorthin.</p>
+            <label class="range">Größe: <b id="finalRadiusLabel"></b> Radius
+              <input id="finalRadiusInput" type="range" min="100" step="50" />
+            </label>
+            <h3>Wo liegt sie?</h3>
+            <div class="seg" id="finalModeSeg">
+              <button data-final="same">Gleiche Mitte<small>wie Start</small></button>
+              <button data-final="random">Zufällig<small>pro Stufe</small></button>
+              <button data-final="custom">Selbst wählen<small>geheim</small></button>
+            </div>
+            <p class="hint" id="finalHint"></p>
+          </div>
+        </div>
+
+        <div class="step" data-step="3">
+          <div class="step-head">
+            <h2>Wie lange spielt ihr?</h2>
+            <p>Wähle eine Vorlage – du kannst später alles anpassen.</p>
+          </div>
+          <button class="first-time" id="firstTimeBtn" data-action="firstTime">
+            <span class="ft-icon" aria-hidden="true"><svg class="i" aria-hidden="true"><use href="/icons.svg#plant-2"></use></svg></span>
+            <span class="ft-text">
+              <b>Ich spiele zum ersten Mal</b>
+              <small id="firstTimeHint">Empfohlene Einstellungen: 60 min, Zone 1,2 km mit 4 Stufen bis 300 m, Ping alle 4 min, abklatschen, Gefangene werden Jäger.</small>
+            </span>
+          </button>
+          <div class="presets" id="presets">
+            <button data-preset="short"><span class="p-icon"><svg class="i" aria-hidden="true"><use href="/icons.svg#bolt"></use></svg></span><b>Kurz</b><small>30 min</small></button>
+            <button data-preset="normal"><span class="p-icon"><svg class="i" aria-hidden="true"><use href="/icons.svg#star"></use></svg></span><b>Normal</b><small>60 min</small></button>
+            <button data-preset="long"><span class="p-icon"><svg class="i c-gold" aria-hidden="true"><use href="/icons.svg#trophy"></use></svg></span><b>Lang</b><small>90 min</small></button>
+          </div>
+          <div class="card">
+            <h3>Wann ist jemand gefangen?</h3>
+            <div class="seg" id="catchSeg">
+              <button data-catch="touch"><svg class="i" aria-hidden="true"><use href="/icons.svg#hand-stop"></use></svg> Abklatschen<small>Berühren = gefangen</small></button>
+              <button data-catch="arm"><svg class="i" aria-hidden="true"><use href="/icons.svg#ruler-2"></use></svg> Armlänge<small>1–2 m + Namen rufen</small></button>
+            </div>
+            <p class="hint">In beiden Fällen bleibt der Hider stehen und zeigt seinen Code. Gibt er ihn nicht her, kann der Jäger einen Streitfall melden – du entscheidest dann.</p>
+          </div>
+          <div class="card">
+            <h3>Special Events</h3>
+            <div class="seg" id="eventsSeg">
+              <button data-events="off">Aus<small>keine</small></button>
+              <button data-events="rare"><svg class="i" aria-hidden="true"><use href="/icons.svg#dice-5"></use></svg> Selten<small>ca. 2 pro Stunde</small></button>
+              <button data-events="often"><svg class="i" aria-hidden="true"><use href="/icons.svg#dice-5"></use></svg> Oft<small>ca. 4 pro Stunde</small></button>
+            </div>
+            <p class="hint">Überraschungen wie Joker-Regen, Jagdfieber, Nebel, Kopfgeld oder Rollentausch – niemand weiß vorher, wann.</p>
+          </div>
+          <div class="card">
+            <h3>So läuft euer Spiel</h3>
+            <ul class="rules" id="rulesSummary"></ul>
+          </div>
+          <details class="card advanced">
+            <summary><svg class="i" aria-hidden="true"><use href="/icons.svg#settings"></use></svg> Mehr Einstellungen</summary>
+            <form id="settingsForm" class="settings"></form>
+          </details>
+        </div>
+
+        <div class="step" data-step="4">
+          <div class="step-head">
+            <h2>Wer jagt wen?</h2>
+            <p>Lege fest, wie viele Jäger es gibt, und lass die Rollen auslosen. Tippe auf eine Rolle, um sie zu tauschen.</p>
+          </div>
+          <div class="card">
+            <div class="hunter-picker">
+              <span>Anzahl Jäger</span>
+              <div class="stepper-num">
+                <button type="button" data-action="huntersMinus" aria-label="Weniger Jäger">−</button>
+                <b id="hunterCount">1</b>
+                <button type="button" data-action="huntersPlus" aria-label="Mehr Jäger">+</button>
+              </div>
+            </div>
+            <button class="btn" data-action="randomize"><svg class="i" aria-hidden="true"><use href="/icons.svg#dice-5"></use></svg> Rollen zufällig auslosen</button>
+            <button class="btn" data-action="randomizeNew" id="rerollBtn" hidden><svg class="i" aria-hidden="true"><use href="/icons.svg#arrows-exchange"></use></svg> Andere Jäger als letzte Runde</button>
+            <p class="hint" id="hunterTip"></p>
+          </div>
+          <div class="card">
+            <h3 id="teamCount"></h3>
+            <ul id="teamList" class="player-list"></ul>
+          </div>
+          <div class="card" id="crushCard">
+            <h3><svg class="i c-crush" aria-hidden="true"><use href="/icons.svg#heart"></use></svg> Crush <span class="muted">(optional)</span></h3>
+            <p class="hint">Zwei Spieler sehen sich die ganze Runde live auf der Karte, egal in welchem Team, und können sich nicht gegenseitig fangen. Nur die beiden und du wissen davon. Sie erfahren es beim Start.</p>
+            <div class="crush-row">
+              <select id="crushA" aria-label="Erster Spieler"></select>
+              <span><svg class="i c-crush" aria-hidden="true"><use href="/icons.svg#heart"></use></svg></span>
+              <select id="crushB" aria-label="Zweiter Spieler"></select>
+            </div>
+            <button class="btn small" data-action="crushClear" id="crushClear">Crush entfernen</button>
+          </div>
+          <div class="card">
+            <h3>Bereit?</h3>
+            <ul id="startChecklist" class="checklist"></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mitspieler: Warten auf den Start -->
+    <div class="guest-only lobby-body">
+      <div class="welcome">
+        <div class="big-emoji"><svg class="i" aria-hidden="true"><use href="/icons.svg#confetti"></use></svg></div>
+        <h2 id="guestWelcome">Du bist dabei!</h2>
+        <p>Warte, bis <b id="hostName"></b> das Spiel startet.</p>
+      </div>
+      <div class="card gps-card" data-gps-card></div>
+          <div class="card bg-card" data-bg-card></div>
+      <div class="card role-card" id="guestRole"></div>
+      <div class="card">
+        <h3>So läuft das Spiel</h3>
+        <ul class="rules" id="guestRules"></ul>
+        <div id="guestZoneMap" class="zone-map small"></div>
+      </div>
+      <div class="card">
+        <h3>Mitspieler <span id="guestCount" class="muted"></span></h3>
+        <ul id="guestPlayers" class="name-chips"></ul>
+      </div>
+    </div>
+
+    <div class="lobby-body">
+      <details class="card chat-card">
+        <summary><svg class="i" aria-hidden="true"><use href="/icons.svg#message-circle"></use></svg> Chat</summary>
+        <div class="chat compact" data-chat="lobby"></div>
+      </details>
+    </div>
+
+    <footer class="lobby-foot">
+      <div class="host-only foot-row">
+        <button class="btn" data-action="stepBack" id="stepBack">‹ Zurück</button>
+        <button class="btn primary" data-action="stepNext" id="stepNext">Weiter ›</button>
+        <button class="btn primary big" data-action="start" id="startBtn">▶ Spiel starten</button>
+      </div>
+      <div class="guest-only wait"><svg class="i" aria-hidden="true"><use href="/icons.svg#hourglass"></use></svg> Warte auf den Start …</div>
+    </footer>
+  </section>
+
+  <!-- SPIEL -->
+  <section id="game" class="screen">
+    <div id="gameMap" class="game-map"></div>
+
+    <header class="hud">
+      <div class="hud-row">
+        <span id="rolePill" class="pill"></span>
+        <span id="phaseLabel" class="phase"></span>
+        <span id="gpsDot" class="gps-dot" title="GPS"></span>
+        <button class="help-btn" data-action="help" aria-label="Hilfe">?</button>
+      </div>
+      <div class="hud-row big">
+        <div class="hud-cell">
+          <div class="hud-label" id="timerLabel">Zeit übrig</div>
+          <div class="hud-value" id="timerValue">--:--</div>
+        </div>
+        <div class="hud-cell">
+          <div class="hud-label">Ping in</div>
+          <div class="hud-value ping" id="pingValue">--:--</div>
+        </div>
+        <div class="hud-cell">
+          <div class="hud-label">Hider übrig</div>
+          <div class="hud-value" id="hidersValue">-</div>
+        </div>
+      </div>
+    </header>
+
+    <div id="banners" class="banners"></div>
+    <div id="eventOverlay" class="event-overlay" hidden></div>
+    <div id="radarWaves" class="radar-waves" aria-hidden="true"></div>
+    <div id="moment" class="moment" role="status" hidden></div>
+    <div id="headstartOverlay" class="overlay-msg"></div>
+
+    <div class="map-buttons">
+      <button class="fab" data-action="recenter" title="Auf mich zentrieren"><svg class="i" aria-hidden="true"><use href="/icons.svg#current-location"></use></svg></button>
+      <button class="fab" data-action="fitAll" title="Alle anzeigen"><svg class="i" aria-hidden="true"><use href="/icons.svg#arrows-maximize"></use></svg></button>
+      <button class="fab" data-action="compass" id="compassBtn" title="Kompass" aria-label="Kompass an oder aus"><svg class="i" aria-hidden="true"><use href="/icons.svg#compass"></use></svg></button>
+      <label id="simToggle" class="fab sim" title="Testmodus"><input type="checkbox" id="simCheck" /> <svg class="i" aria-hidden="true"><use href="/icons.svg#flask"></use></svg></label>
+    </div>
+
+    <div id="panelPlayers" class="panel">
+      <h2>Spieler</h2>
+      <ul id="gamePlayers" class="player-list"></ul>
+      <div class="host-only panel-actions">
+        <button class="btn danger" data-action="end">Runde beenden</button>
+      </div>
+    </div>
+    <div id="panelChat" class="panel">
+      <div class="chat" data-chat="game"></div>
+    </div>
+
+    <div id="dock" class="dock"></div>
+
+    <nav class="tabbar">
+      <button data-tab="map" class="active"><svg class="i" aria-hidden="true"><use href="/icons.svg#map-2"></use></svg><span>Karte</span></button>
+      <button data-tab="players"><svg class="i" aria-hidden="true"><use href="/icons.svg#users"></use></svg><span>Spieler</span></button>
+      <button data-tab="chat"><svg class="i" aria-hidden="true"><use href="/icons.svg#message-circle"></use></svg><span>Chat</span><i id="chatBadge" class="badge"></i></button>
+    </nav>
+  </section>
+
+  <!-- ENDE -->
+  <section id="end" class="screen">
+    <div class="end-hero" id="endHero">
+      <div class="confetti" id="endConfetti" aria-hidden="true"></div>
+      <div class="end-kicker" id="endKicker"></div>
+      <div id="endIcon" class="end-icon"></div>
+      <h1 id="endTitle"></h1>
+      <p id="endReason"></p>
+      <div id="endPodium" class="podium"></div>
+      <div id="endMine" class="end-mine"></div>
+      <div class="end-actions">
+        <button class="btn share-result" data-action="shareResult"><svg class="i" aria-hidden="true"><use href="/icons.svg#share"></use></svg> Ergebnis teilen</button>
+        <button class="btn ghost" data-action="showRoutes">Routen ansehen</button>
+      </div>
+    </div>
+    <div class="end-body">
+      <div class="card" id="endRoutes">
+        <h2>Routen</h2>
+        <p class="hint">Tippe auf einen Namen, um die Route zu sehen.</p>
+        <div class="route-picker" id="routePicker"></div>
+        <div id="endMap" class="end-map"></div>
+        <p class="hint" id="routeInfo"></p>
+      </div>
+      <div class="card">
+        <h2>Auswertung</h2>
+        <ul id="endStats" class="stats"></ul>
+      </div>
+      <div class="card">
+        <h2>Chat</h2>
+        <div class="chat compact" data-chat="end"></div>
+      </div>
+    </div>
+    <footer class="lobby-foot">
+      <button class="btn primary big host-only" data-action="lobby">Neue Runde</button>
+      <div class="guest-only wait">Der Spielleiter kann eine neue Runde starten.</div>
+      <button class="btn ghost" data-action="leave">Spiel verlassen</button>
+    </footer>
+  </section>
+
+  <!-- BISHERIGE SPIELE -->
+  <section id="history" class="screen">
+    <div class="history-inner">
+      <button type="button" class="back-link" id="historyBack">‹ Zurück</button>
+      <h2>Bisherige Spiele</h2>
+      <div id="historyBody"></div>
+    </div>
+  </section>
+
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+  <div id="modal" class="modal" hidden></div>
+  <div id="connLost" class="conn-lost" hidden>Verbindung weg – verbinde neu …</div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/5.6.0/maplibre-gl.min.js"></script>
+  <!-- Verbindet MapLibre mit Leaflet (@maplibre/maplibre-gl-leaflet 0.1.4, ISC-Lizenz, siehe vendor/) -->
+  <script src="/vendor/leaflet-maplibre-gl.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js" type="module"></script>
+  <script src="/history.js" type="module"></script>
+</body>
+</html>

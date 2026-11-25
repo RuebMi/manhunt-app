@@ -1,0 +1,18 @@
+# Render-Blueprint: kostenloser Web-Service in Frankfurt.
+# Schläft nach 15 min ohne Spieler und wacht beim nächsten Aufruf von selbst auf.
+services:
+  - type: web
+    name: manhunt
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      # Neon-Datenbank für „Bisherige Spiele“. Den Wert trägst du im Render-Dashboard ein.
+      - key: DATABASE_URL
+        sync: false

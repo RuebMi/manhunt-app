@@ -1,0 +1,4 @@
+#!/bin/sh
+# Vor jedem git push: abbrechen, wenn auf Render gerade ein Spiel läuft (siehe scripts/check-live.mjs).
+# Einrichten (einmal pro Rechner): git config core.hooksPath .githooks
+exec node "$(git rev-parse --show-toplevel)/scripts/check-live.mjs"
